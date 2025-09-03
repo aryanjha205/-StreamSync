@@ -193,11 +193,8 @@
             gap: 16px;
             border: 1px solid var(--border);
             transition: var(--transition);
-        }
-
-        .user-info:hover {
-            border-color: var(--primary);
-            box-shadow: 0 0 20px rgba(30, 215, 96, 0.2);
+            /* Add margin to separate from library */
+            margin-bottom: 32px;
         }
 
         .user-avatar {
@@ -1505,12 +1502,6 @@
                             <span>Your Library</span>
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" data-page="playlists">
-                            <i class="fas fa-list-music"></i>
-                            <span>Playlists</span>
-                        </a>
-                    </li>
                     <li class="nav-item" id="admin-nav" style="display: none;">
                         <a href="#" class="nav-link" data-page="admin">
                             <i class="fas fa-shield-alt"></i>
@@ -1585,20 +1576,17 @@
                         </div>
                     </div>
                 </div>
-                
+                <!-- Add browse categories container for categories grid -->
+                <div id="browse-categories">
+                    <div class="content-section">
+                        <h2 class="section-title">Browse Categories</h2>
+                        <div class="content-grid" id="categories-grid"></div>
+                    </div>
+                </div>
                 <div id="search-results" style="display: none;">
                     <div class="content-section">
                         <h2 class="section-title">Top Results</h2>
                         <div class="content-grid" id="search-songs"></div>
-                    </div>
-                </div>
-                
-                <div class="content-section" id="browse-categories">
-                    <div class="section-header">
-                        <h2 class="section-title">Browse All</h2>
-                    </div>
-                    <div class="content-grid" id="categories-grid">
-                        <!-- Categories loaded dynamically -->
                     </div>
                 </div>
             </div>
@@ -1622,26 +1610,6 @@
                     </div>
                     <div class="content-grid" id="user-library">
                         <!-- User's library content -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Playlists Page -->
-            <div class="page" id="playlists-page">
-                <div class="page-header">
-                    <div>
-                        <h1 class="page-title">Playlists</h1>
-                        <p class="page-subtitle">Organize your music your way</p>
-                    </div>
-                    <button class="btn" onclick="createPlaylist()">
-                        <i class="fas fa-plus"></i>
-                        New Playlist
-                    </button>
-                </div>
-                
-                <div class="content-section">
-                    <div class="content-grid" id="user-playlists">
-                        <!-- User's playlists -->
                     </div>
                 </div>
             </div>
@@ -1825,6 +1793,36 @@
                     Upload Song
                 </button>
             </form>
+        </div>
+    </div>
+
+    <!-- Category Modal -->
+    <div class="modal" id="category-modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="category-modal-title">Category</h3>
+                <button class="close-btn" onclick="closeModal('category-modal')" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="category-modal-body">
+                <!-- Songs will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Playlist Modal -->
+    <div class="modal" id="playlist-view-modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="playlist-modal-title">Playlist</h3>
+                <button class="close-btn" onclick="closeModal('playlist-view-modal')" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="playlist-modal-body">
+                <!-- Playlist details and songs will be loaded here -->
+            </div>
         </div>
     </div>
 
@@ -2055,9 +2053,6 @@
                 case 'library':
                     loadLibraryData();
                     break;
-                case 'playlists':
-                    loadPlaylistsData();
-                    break;
                 case 'admin':
                     loadAdminData();
                     break;
@@ -2089,13 +2084,16 @@
 
         async function loadSearchData() {
             const categoriesContainer = document.getElementById('categories-grid');
+            const browseCategories = document.getElementById('browse-categories');
+            const searchResults = document.getElementById('search-results');
+            // Show categories, hide search results
+            browseCategories.style.display = 'block';
+            searchResults.style.display = 'none';
             showLoading(categoriesContainer);
-            
             try {
                 const categories = await apiCall('/browse/categories');
                 renderCategoriesGrid(categories.categories || []);
             } catch (error) {
-                console.error('Error loading search data:', error);
                 categoriesContainer.innerHTML = '<p style="color: var(--text-secondary); text-align: center; grid-column: 1 / -1;">Unable to load categories</p>';
             }
         }
@@ -2110,19 +2108,6 @@
             } catch (error) {
                 console.error('Error loading library data:', error);
                 libraryContainer.innerHTML = '<p style="color: var(--text-secondary); text-align: center; grid-column: 1 / -1;">Unable to load library</p>';
-            }
-        }
-
-        async function loadPlaylistsData() {
-            const playlistsContainer = document.getElementById('user-playlists');
-            showLoading(playlistsContainer);
-            
-            try {
-                const playlists = await apiCall('/user/playlists');
-                renderPlaylistsGrid(playlists.playlists || []);
-            } catch (error) {
-                console.error('Error loading playlists data:', error);
-                playlistsContainer.innerHTML = '<p style="color: var(--text-secondary); text-align: center; grid-column: 1 / -1;">Unable to load playlists</p>';
             }
         }
 
@@ -2226,42 +2211,6 @@
                 </div>
                 `;
             }).join('');
-        }
-
-        function renderPlaylistsGrid(playlists) {
-            const container = document.getElementById('user-playlists');
-            
-            if (!playlists.length) {
-                container.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 48px;">
-                        <i class="fas fa-list-music" style="font-size: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
-                        <p style="color: var(--text-secondary); margin-bottom: 24px;">No playlists yet</p>
-                        <button class="btn" onclick="createPlaylist()">
-                            <i class="fas fa-plus"></i>
-                            Create Your First Playlist
-                        </button>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = playlists.map(playlist => `
-                <div class="content-card animate-slide-in" onclick="openPlaylist('${playlist.id}')">
-                    <div class="card-image">
-                        ${playlist.cover_url ? 
-                            `<img src="${playlist.cover_url}" alt="${playlist.name}" loading="lazy">` : 
-                            `<i class="fas fa-list-music"></i>`
-                        }
-                        <button class="play-btn" onclick="event.stopPropagation(); playPlaylist('${playlist.id}')" title="Play ${playlist.name}">
-                            <i class="fas fa-play"></i>
-                        </button>
-                    </div>
-                    <div class="card-content">
-                        <div class="card-title">${playlist.name}</div>
-                        <div class="card-subtitle">${playlist.track_count || 0} songs</div>
-                    </div>
-                </div>
-            `).join('');
         }
 
         function renderSongsTable(songs) {
@@ -2384,19 +2333,13 @@
                 }
             } else {
                 playerImage.innerHTML = `<i class="fas fa-music"></i>`;
-                currentSongEl.textContent = "Select a song";
-                currentArtistEl.textContent = "Artist";
             }
 
-            playPauseBtn.innerHTML = isPlaying ?
-                '<i class="fas fa-pause"></i>' :
-                '<i class="fas fa-play"></i>';
-            
             playPauseBtn.title = isPlaying ? 'Pause' : 'Play';
         }
 
         function updateProgress() {
-            const audioPlayer = document.getElementById('audio-player');
+            const audioPlayer = document.getElement('audio-player');
             const progressFill = document.getElementById('progress-fill');
             const currentTimeEl = document.getElementById('current-time');
             const totalTimeEl = document.getElementById('total-time');
@@ -2690,10 +2633,6 @@
 
         function openPlaylist(playlistId) {
             showNotification('Playlist view coming soon!', 'warning');
-        }
-
-        function playPlaylist(playlistId) {
-            showNotification('Playlist playback coming soon!', 'warning');
         }
     </script>
 </body>
