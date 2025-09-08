@@ -2,9 +2,8 @@
   "version": 2,
   "builds": [
     {
-      "src": "backend.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
+      "src": "api/index.py",
+      "use": "@vercel/python"
     },
     {
       "src": "index.html",
@@ -14,7 +13,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "backend.py"
+      "dest": "api/index.py"
     },
     {
       "src": "/(.*)",
