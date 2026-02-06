@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Settings:
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/")
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/streamsync?retryWrites=true&w=majority")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     JWT_SECRET = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
@@ -51,9 +51,12 @@ class Settings:
     ALLOWED_IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp"}
 
 settings = Settings()
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-os.makedirs(f"{settings.UPLOAD_DIR}/audio", exist_ok=True)
-os.makedirs(f"{settings.UPLOAD_DIR}/images", exist_ok=True)
+try:
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    os.makedirs(os.path.join(settings.UPLOAD_DIR, "audio"), exist_ok=True)
+    os.makedirs(os.path.join(settings.UPLOAD_DIR, "images"), exist_ok=True)
+except Exception as e:
+    logger.warning(f"Could not create upload directories: {e}")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -108,24 +111,37 @@ class DatabaseManager:
     @staticmethod
     async def init_db():
         global db
+        if db is not None:
+            return db
+            
         try:
             client = motor.motor_asyncio.AsyncIOMotorClient(
                 settings.MONGODB_URI, 
                 tlsCAFile=certifi.where(),
-                serverSelectionTimeoutMS=5000
+                tlsAllowInvalidCertificates=True,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000
             )
-            db = client[settings.DATABASE_NAME]
+            temp_db = client[settings.DATABASE_NAME]
+            # Verify connection
             await client.admin.command('ping')
             
-            await db.users.create_index("email", unique=True)
-            await db.songs.create_index("title")
-            await db.songs.create_index("artist")
-            await db.songs.create_index("genre")
-            await db.playlists.create_index("owner_id")
-            await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
+            # Create indexes (non-blocking)
+            await temp_db.users.create_index("email", unique=True)
+            await temp_db.songs.create_index("title")
+            
+            db = temp_db
             logger.info("Database initialized successfully")
+            return db
         except Exception as e:
             logger.error(f"Database initialization failed: {e}")
+            raise e
+
+async def get_db():
+    global db
+    if db is None:
+        await DatabaseManager.init_db()
+    return db
 
     @staticmethod
     async def create_user(user_data: UserCreate) -> User:
@@ -256,7 +272,7 @@ def verify_token(token: str) -> dict:
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db_instance=Depends(get_db)) -> User:
     payload = verify_token(credentials.credentials)
     user_id = payload.get("sub")
     if not user_id:
@@ -300,13 +316,23 @@ manager = ConnectionManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await DatabaseManager.init_db()
-    await CacheManager.init_redis()
-    await seed_demo_data()
-    logger.info("Application started successfully")
+    # For Vercel, we attempt to init on start, but routes will also ensure init via get_db
+    try:
+        await DatabaseManager.init_db()
+        await CacheManager.init_redis()
+        # Only seed if specifically requested or locally
+        if os.getenv("VERCEL") != "1":
+            await seed_demo_data()
+    except Exception as e:
+        logger.error(f"Lifespan error: {e}")
+    
+    logger.info("Application lifespan started")
     yield
     if redis_client:
-        await redis_client.close()
+        try:
+            await redis_client.close()
+        except:
+            pass
     logger.info("Application shutdown complete")
 
 app = FastAPI(
@@ -363,23 +389,34 @@ async def health_check():
 
 # Authentication endpoints
 @app.post("/api/auth/register", response_model=User)
-async def register(user_data: UserCreate):
-    return await DatabaseManager.create_user(user_data)
+async def register(user_data: UserCreate, db_instance=Depends(get_db)):
+    try:
+        return await DatabaseManager.create_user(user_data)
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error. Database might be connecting...")
 
 @app.post("/api/auth/login", response_model=Token)
-async def login(login_data: UserLogin):
-    user = await DatabaseManager.authenticate_user(login_data.email, login_data.password)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    access_token = create_token(
-        {"sub": user.id, "type": "access"},
-        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    refresh_token = create_token(
-        {"sub": user.id, "type": "refresh"},
-        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    )
-    return Token(access_token=access_token, refresh_token=refresh_token, user=user)
+async def login(login_data: UserLogin, db_instance=Depends(get_db)):
+    try:
+        user = await DatabaseManager.authenticate_user(login_data.email, login_data.password)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        access_token = create_token(
+            {"sub": user.id, "type": "access"},
+            timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+        refresh_token = create_token(
+            {"sub": user.id, "type": "refresh"},
+            timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        )
+        return Token(access_token=access_token, refresh_token=refresh_token, user=user)
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error. Database might be connecting...")
 
 @app.get("/api/auth/me", response_model=User)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -404,7 +441,7 @@ async def refresh_token(token_data: dict):
 
 # Song endpoints
 @app.get("/api/songs", response_model=List[Song])
-async def get_songs(skip: int = 0, limit: int = 50):
+async def get_songs(skip: int = 0, limit: int = 50, db_instance=Depends(get_db)):
     cached_songs = await CacheManager.get(f"songs:{skip}:{limit}")
     if cached_songs:
         return json.loads(cached_songs)
@@ -417,7 +454,7 @@ async def get_songs(skip: int = 0, limit: int = 50):
     return songs
 
 @app.get("/api/songs/{song_id}", response_model=Song)
-async def get_song(song_id: str):
+async def get_song(song_id: str, db_instance=Depends(get_db)):
     cached_song = await CacheManager.get(f"song:{song_id}")
     if cached_song:
         return Song(**json.loads(cached_song))
@@ -446,7 +483,7 @@ async def play_song(song_id: str, current_user: User = Depends(get_current_user)
 
 # Search endpoint
 @app.get("/api/search", response_model=SearchResponse)
-async def search(q: str, limit: int = 20):
+async def search(q: str, limit: int = 20, db_instance=Depends(get_db)):
     if not q.strip():
         raise HTTPException(status_code=400, detail="Search query required")
     try:
@@ -494,7 +531,7 @@ async def get_user_library(current_user: User = Depends(get_current_user)):
     return await get_recent_songs(current_user)
 
 @app.get("/api/browse/categories")
-async def get_categories():
+async def get_categories(db_instance=Depends(get_db)):
     cursor = db.categories.find()
     categories = []
     async for cat in cursor:

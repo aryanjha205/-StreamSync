@@ -2028,6 +2028,7 @@
 
             document.getElementById('auth-container').style.display = 'flex';
             document.getElementById('app-container').style.display = 'none';
+            document.getElementById('admin-nav').style.display = 'none';
 
             // Reset player
             pauseAudio();
@@ -2053,6 +2054,8 @@
             // Show admin nav if user is admin
             if (currentUser.role === 'admin') {
                 document.getElementById('admin-nav').style.display = 'block';
+            } else {
+                document.getElementById('admin-nav').style.display = 'none';
             }
 
             // Set greeting based on time
@@ -2074,6 +2077,13 @@
 
         // Navigation
         function navigateToPage(pageName) {
+            // Security check for admin page
+            if (pageName === 'admin' && currentUser?.role !== 'admin') {
+                showNotification('Access denied. Admin privileges required.', 'error');
+                navigateToPage('home');
+                return;
+            }
+
             // Close mobile menu if open
             closeMobileMenu();
 
