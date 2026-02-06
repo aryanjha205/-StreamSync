@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 # --- Settings ---
 class Settings:
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/")
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/streamsync?retryWrites=true&w=majority")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     JWT_SECRET = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
@@ -123,17 +123,20 @@ class DatabaseManager:
     @staticmethod
     async def init_db():
         global db
+        print(f"Connecting to MongoDB: {settings.MONGODB_URI[:20]}...")
         try:
             client = motor.motor_asyncio.AsyncIOMotorClient(
                 settings.MONGODB_URI, 
                 tlsCAFile=certifi.where(),
-                tlsAllowInvalidCertificates=True,  # Added to solve local SSL issues
-                serverSelectionTimeoutMS=5000,
+                tlsAllowInvalidCertificates=True,
+                serverSelectionTimeoutMS=10000,
                 connectTimeoutMS=10000
             )
             db = client[settings.DATABASE_NAME]
             # Verify connection
+            print("Pinging MongoDB...")
             await client.admin.command('ping')
+            print("Successfully connected to MongoDB!")
             
             await db.users.create_index("email", unique=True)
             await db.songs.create_index("title")
@@ -143,18 +146,22 @@ class DatabaseManager:
             await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
             logger.info("Database initialized successfully")
         except Exception as e:
+            print(f"FAILED to connect to MongoDB: {e}")
             logger.error(f"Database initialization failed: {e}")
-            logger.info("Retrying connection without SSL verification...")
+            print("Attempting fallback connection...")
             try:
                 client = motor.motor_asyncio.AsyncIOMotorClient(
                     settings.MONGODB_URI,
-                    tls=False,
-                    serverSelectionTimeoutMS=5000
+                    tls=True,
+                    tlsAllowInvalidCertificates=True,
+                    serverSelectionTimeoutMS=10000
                 )
                 db = client[settings.DATABASE_NAME]
                 await client.admin.command('ping')
-                logger.info("Connected to Database (without SSL)")
+                print("Connected to MongoDB (with tlsAllowInvalidCertificates fallback)")
+                logger.info("Connected to Database (with tlsAllowInvalidCertificates fallback)")
             except Exception as e2:
+                print(f"Fallback connection also failed: {e2}")
                 logger.error(f"Fallback connection failed: {e2}")
 
     @staticmethod
@@ -900,6 +907,6 @@ if __name__ == "__main__":
         "backend:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=False,
         log_level="info"
     )
