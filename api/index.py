@@ -93,6 +93,8 @@ class SongBase(BaseModel):
     album: Optional[str] = None
     genre: Optional[str] = None
     duration: Optional[int] = None
+    file_url: Optional[str] = None
+    cover_url: Optional[str] = None
 
 class Song(SongBase):
     id: str
@@ -137,12 +139,6 @@ class DatabaseManager:
             logger.error(f"Database initialization failed: {e}")
             raise e
 
-async def get_db():
-    global db
-    if db is None:
-        await DatabaseManager.init_db()
-    return db
-
     @staticmethod
     async def create_user(user_data: UserCreate) -> User:
         hashed_password = pwd_context.hash(user_data.password)
@@ -177,6 +173,12 @@ async def get_db():
             user_doc.pop("password", None)
             return User(id=user_doc["_id"], **user_doc)
         return None
+
+async def get_db():
+    global db
+    if db is None:
+        await DatabaseManager.init_db()
+    return db
 
 class CacheManager:
     @staticmethod
@@ -586,7 +588,27 @@ async def upload_song(
     await db.songs.insert_one(song_doc)
     return {"message": "Song added successfully", "song_id": song_id}
 
+@app.put("/api/admin/songs/{song_id}")
+async def update_song(
+    song_id: str,
+    song_data: SongBase,
+    admin_user: User = Depends(require_admin)
+):
+    song_doc = await db.songs.find_one({"_id": song_id})
+    if not song_doc:
+        raise HTTPException(status_code=404, detail="Song not found")
+    update_data = song_data.dict(exclude_unset=True)
+    await db.songs.update_one(
+        {"_id": song_id},
+        {"$set": update_data}
+    )
+    await CacheManager.delete(f"song:{song_id}")
+    await CacheManager.delete_pattern("songs:*")
+    return {"message": "Song updated successfully"}
+
 @app.delete("/api/admin/songs/{song_id}")
 async def delete_song(song_id: str, admin_user: User = Depends(require_admin)):
     await db.songs.delete_one({"_id": song_id})
+    await CacheManager.delete(f"song:{song_id}")
+    await CacheManager.delete_pattern("songs:*")
     return {"message": "Song deleted successfully"}

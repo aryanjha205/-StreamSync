@@ -104,6 +104,8 @@ class SongBase(BaseModel):
     album: Optional[str] = None
     genre: Optional[str] = None
     duration: Optional[int] = None
+    file_url: Optional[str] = None
+    cover_url: Optional[str] = None
 
 class Song(SongBase):
     id: str

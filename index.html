@@ -1843,6 +1843,52 @@
         </div>
     </div>
 
+    <!-- Edit Modal -->
+    <div class="modal" id="edit-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Song</h3>
+                <button class="close-btn" onclick="closeModal('edit-modal')" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="edit-form">
+                <input type="hidden" id="edit-song-id">
+                <div class="form-group">
+                    <label class="form-label">Song Title</label>
+                    <input type="text" class="form-input" id="edit-song-title" placeholder="Enter song title" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Artist</label>
+                    <input type="text" class="form-input" id="edit-song-artist" placeholder="Enter artist name"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Album (Optional)</label>
+                    <input type="text" class="form-input" id="edit-song-album" placeholder="Enter album name">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Genre (Optional)</label>
+                    <input type="text" class="form-input" id="edit-song-genre" placeholder="Enter genre">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Audio URL (Link)</label>
+                    <input type="url" class="form-input" id="edit-song-url" placeholder="https://example.com/song.mp3"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cover Image URL (Optional)</label>
+                    <input type="url" class="form-input" id="edit-cover-url"
+                        placeholder="https://example.com/cover.jpg">
+                </div>
+                <button type="submit" class="btn btn-full">
+                    <i class="fas fa-save"></i>
+                    Save Changes
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- Category Modal -->
     <div class="modal" id="category-modal">
         <div class="modal-content" style="max-width: 700px;">
@@ -2521,8 +2567,44 @@
             }
         }
 
-        function editSong(songId) {
-            showNotification('Edit feature coming soon!', 'warning');
+        async function editSong(songId) {
+            try {
+                const song = await apiCall(`/songs/${songId}`);
+                document.getElementById('edit-song-id').value = song.id;
+                document.getElementById('edit-song-title').value = song.title;
+                document.getElementById('edit-song-artist').value = song.artist;
+                document.getElementById('edit-song-album').value = song.album || '';
+                document.getElementById('edit-song-genre').value = song.genre || '';
+                document.getElementById('edit-song-url').value = song.file_url || '';
+                document.getElementById('edit-cover-url').value = song.cover_url || '';
+                showModal('edit-modal');
+            } catch (error) {
+                showNotification('Failed to fetch song details.', 'error');
+            }
+        }
+
+        async function handleEditSubmit(songId, data) {
+            const editBtn = document.querySelector('#edit-form button[type="submit"]');
+            const originalText = editBtn.innerHTML;
+
+            editBtn.disabled = true;
+            editBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            try {
+                await apiCall(`/admin/songs/${songId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+
+                showNotification('Song updated successfully!');
+                closeModal('edit-modal');
+                loadAdminData();
+            } catch (error) {
+                showNotification('Failed to update song. Please try again.', 'error');
+            } finally {
+                editBtn.disabled = false;
+                editBtn.innerHTML = originalText;
+            }
         }
 
         // Event Listeners
@@ -2644,6 +2726,20 @@
 
                 handleFileUpload(formData);
                 this.reset();
+            });
+
+            document.getElementById('edit-form').addEventListener('submit', function (e) {
+                e.preventDefault();
+                const songId = document.getElementById('edit-song-id').value;
+                const data = {
+                    title: document.getElementById('edit-song-title').value,
+                    artist: document.getElementById('edit-song-artist').value,
+                    album: document.getElementById('edit-song-album').value,
+                    genre: document.getElementById('edit-song-genre').value,
+                    file_url: document.getElementById('edit-song-url').value,
+                    cover_url: document.getElementById('edit-cover-url').value
+                };
+                handleEditSubmit(songId, data);
             });
 
             // Modal close on outside click
