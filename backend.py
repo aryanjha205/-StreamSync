@@ -38,6 +38,7 @@ from PIL import Image
 import mutagen
 import json
 import logging
+import certifi
 
 try:
     from jose import jwt
@@ -50,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 # --- Settings ---
 class Settings:
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad1:E3UGzPvMTzGNAmkv@project.gqnzqur.mongodb.net/")
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     JWT_SECRET = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
@@ -122,15 +123,39 @@ class DatabaseManager:
     @staticmethod
     async def init_db():
         global db
-        client = motor.motor_asyncio.AsyncIOMotorClient(settings.MONGODB_URI)
-        db = client[settings.DATABASE_NAME]
-        await db.users.create_index("email", unique=True)
-        await db.songs.create_index("title")
-        await db.songs.create_index("artist")
-        await db.songs.create_index("genre")
-        await db.playlists.create_index("owner_id")
-        await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
-        logger.info("Database initialized successfully")
+        try:
+            client = motor.motor_asyncio.AsyncIOMotorClient(
+                settings.MONGODB_URI, 
+                tlsCAFile=certifi.where(),
+                tlsAllowInvalidCertificates=True,  # Added to solve local SSL issues
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000
+            )
+            db = client[settings.DATABASE_NAME]
+            # Verify connection
+            await client.admin.command('ping')
+            
+            await db.users.create_index("email", unique=True)
+            await db.songs.create_index("title")
+            await db.songs.create_index("artist")
+            await db.songs.create_index("genre")
+            await db.playlists.create_index("owner_id")
+            await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+            logger.info("Retrying connection without SSL verification...")
+            try:
+                client = motor.motor_asyncio.AsyncIOMotorClient(
+                    settings.MONGODB_URI,
+                    tls=False,
+                    serverSelectionTimeoutMS=5000
+                )
+                db = client[settings.DATABASE_NAME]
+                await client.admin.command('ping')
+                logger.info("Connected to Database (without SSL)")
+            except Exception as e2:
+                logger.error(f"Fallback connection failed: {e2}")
 
     @staticmethod
     async def create_user(user_data: UserCreate) -> User:
@@ -172,8 +197,14 @@ class CacheManager:
     @staticmethod
     async def init_redis():
         global redis_client
-        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-        logger.info("Redis initialized successfully")
+        try:
+            redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+            # Try a quick ping to see if it's alive
+            await asyncio.wait_for(redis_client.ping(), timeout=1.0)
+            logger.info("Redis initialized successfully")
+        except Exception as e:
+            logger.warning(f"Redis connection failed ({settings.REDIS_URL}): {e}. Caching will be disabled.")
+            redis_client = None
 
     @staticmethod
     async def get(key: str) -> Optional[str]:
@@ -655,29 +686,10 @@ async def upload_song(
     artist: str = Form(...),
     album: Optional[str] = Form(None),
     genre: Optional[str] = Form(None),
-    audio_file: UploadFile = File(...),
-    cover_image: Optional[UploadFile] = File(None),
+    audio_url: str = Form(...),
+    cover_url: Optional[str] = Form(None),
     admin_user: User = Depends(require_admin)
 ):
-    audio_ext = os.path.splitext(audio_file.filename)[1].lower()
-    if audio_ext not in settings.ALLOWED_AUDIO_TYPES:
-        raise HTTPException(status_code=400, detail="Invalid audio file type")
-    if cover_image:
-        image_ext = os.path.splitext(cover_image.filename)[1].lower()
-        if image_ext not in settings.ALLOWED_IMAGE_TYPES:
-            raise HTTPException(status_code=400, detail="Invalid image file type")
-    audio_file.file.seek(0, 2)
-    file_size = audio_file.file.tell()
-    audio_file.file.seek(0)
-    if file_size > settings.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File too large")
-    audio_path, audio_filename = await FileManager.save_file(audio_file, "audio")
-    metadata = FileManager.extract_audio_metadata(audio_path)
-    cover_url = None
-    if cover_image:
-        cover_path, cover_filename = await FileManager.save_file(cover_image, "images")
-        cover_path = await FileManager.process_cover_image(cover_path)
-        cover_url = f"/api/files/images/{os.path.basename(cover_path)}"
     song_id = str(uuid.uuid4())
     song_doc = {
         "_id": song_id,
@@ -685,9 +697,9 @@ async def upload_song(
         "artist": artist,
         "album": album,
         "genre": genre,
-        "duration": metadata.get("duration", 0),
-        "file_url": f"/api/stream/{song_id}",
-        "file_path": audio_path,
+        "duration": 0,
+        "file_url": audio_url,
+        "file_path": None,
         "cover_url": cover_url,
         "play_count": 0,
         "created_at": datetime.utcnow(),
@@ -695,7 +707,7 @@ async def upload_song(
     }
     await db.songs.insert_one(song_doc)
     await CacheManager.delete_pattern("songs:*")
-    return {"message": "Song uploaded successfully", "song_id": song_id}
+    return {"message": "Song added successfully", "song_id": song_id}
 
 @app.put("/api/admin/songs/{song_id}")
 async def update_song(

@@ -25,19 +25,20 @@ from PIL import Image
 import mutagen
 import json
 import logging
+import certifi
 
 try:
     from jose import jwt
-except ImportError as e:
+except ImportError:
     import sys
-    print("\nERROR: python-jose must be installed. Run 'pip install python-jose'.\nError: {}\n".format(e))
+    print("\nERROR: python-jose must be installed. Run 'pip install python-jose'.\n")
     sys.exit(1)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Settings:
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad1:E3UGzPvMTzGNAmkv@project.gqnzqur.mongodb.net/")
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     JWT_SECRET = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
@@ -107,15 +108,24 @@ class DatabaseManager:
     @staticmethod
     async def init_db():
         global db
-        client = motor.motor_asyncio.AsyncIOMotorClient(settings.MONGODB_URI)
-        db = client[settings.DATABASE_NAME]
-        await db.users.create_index("email", unique=True)
-        await db.songs.create_index("title")
-        await db.songs.create_index("artist")
-        await db.songs.create_index("genre")
-        await db.playlists.create_index("owner_id")
-        await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
-        logger.info("Database initialized successfully")
+        try:
+            client = motor.motor_asyncio.AsyncIOMotorClient(
+                settings.MONGODB_URI, 
+                tlsCAFile=certifi.where(),
+                serverSelectionTimeoutMS=5000
+            )
+            db = client[settings.DATABASE_NAME]
+            await client.admin.command('ping')
+            
+            await db.users.create_index("email", unique=True)
+            await db.songs.create_index("title")
+            await db.songs.create_index("artist")
+            await db.songs.create_index("genre")
+            await db.playlists.create_index("owner_id")
+            await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
 
     @staticmethod
     async def create_user(user_data: UserCreate) -> User:
@@ -342,3 +352,204 @@ async def seed_demo_data():
         logger.info("Demo data seeded successfully")
     except Exception as e:
         logger.error(f"Error seeding demo data: {e}")
+# --- API Routes ---
+@app.get("/")
+async def root():
+    return {"message": "StreamSync Music API", "version": "1.0.0", "status": "running"}
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.utcnow()}
+
+# Authentication endpoints
+@app.post("/api/auth/register", response_model=User)
+async def register(user_data: UserCreate):
+    return await DatabaseManager.create_user(user_data)
+
+@app.post("/api/auth/login", response_model=Token)
+async def login(login_data: UserLogin):
+    user = await DatabaseManager.authenticate_user(login_data.email, login_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    access_token = create_token(
+        {"sub": user.id, "type": "access"},
+        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    refresh_token = create_token(
+        {"sub": user.id, "type": "refresh"},
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    )
+    return Token(access_token=access_token, refresh_token=refresh_token, user=user)
+
+@app.get("/api/auth/me", response_model=User)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    return current_user
+
+@app.post("/api/auth/refresh")
+async def refresh_token(token_data: dict):
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="Refresh token required")
+    payload = verify_token(refresh_token)
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    user = await DatabaseManager.get_user_by_id(payload.get("sub"))
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    access_token = create_token(
+        {"sub": user.id, "type": "access"},
+        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# Song endpoints
+@app.get("/api/songs", response_model=List[Song])
+async def get_songs(skip: int = 0, limit: int = 50):
+    cached_songs = await CacheManager.get(f"songs:{skip}:{limit}")
+    if cached_songs:
+        return json.loads(cached_songs)
+    cursor = db.songs.find().skip(skip).limit(limit).sort("created_at", -1)
+    songs = []
+    async for song_doc in cursor:
+        song_doc["id"] = str(song_doc.pop("_id"))
+        songs.append(Song(**song_doc))
+    await CacheManager.set(f"songs:{skip}:{limit}", json.dumps([song.dict() for song in songs]), 300)
+    return songs
+
+@app.get("/api/songs/{song_id}", response_model=Song)
+async def get_song(song_id: str):
+    cached_song = await CacheManager.get(f"song:{song_id}")
+    if cached_song:
+        return Song(**json.loads(cached_song))
+    song_doc = await db.songs.find_one({"_id": song_id})
+    if not song_doc:
+        raise HTTPException(status_code=404, detail="Song not found")
+    song_doc["id"] = str(song_doc.pop("_id"))
+    song = Song(**song_doc)
+    await CacheManager.set(f"song:{song_id}", song.json(), 600)
+    return song
+
+@app.post("/api/songs/{song_id}/play")
+async def play_song(song_id: str, current_user: User = Depends(get_current_user)):
+    await db.songs.update_one(
+        {"_id": song_id},
+        {"$inc": {"play_count": 1}}
+    )
+    await db.play_history.insert_one({
+        "user_id": current_user.id,
+        "song_id": song_id,
+        "played_at": datetime.utcnow()
+    })
+    await CacheManager.delete(f"song:{song_id}")
+    await CacheManager.delete_pattern("songs:*")
+    return {"message": "Play recorded"}
+
+# Search endpoint
+@app.get("/api/search", response_model=SearchResponse)
+async def search(q: str, limit: int = 20):
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="Search query required")
+    try:
+        re.compile(q)
+    except re.error:
+        raise HTTPException(status_code=400, detail="Invalid search query")
+    
+    songs_cursor = db.songs.find({
+        "$or": [
+            {"title": {"$regex": q, "$options": "i"}},
+            {"artist": {"$regex": q, "$options": "i"}},
+            {"album": {"$regex": q, "$options": "i"}},
+            {"genre": {"$regex": q, "$options": "i"}}
+        ]
+    }).limit(limit)
+    
+    songs = []
+    async for song_doc in songs_cursor:
+        song_doc["id"] = str(song_doc.pop("_id"))
+        songs.append(Song(**song_doc))
+    
+    return SearchResponse(songs=songs, artists=[], albums=[])
+
+# User endpoints
+@app.get("/api/user/recent")
+async def get_recent_songs(current_user: User = Depends(get_current_user)):
+    cursor = db.songs.find().sort("play_count", -1).limit(6)
+    songs = []
+    async for song_doc in cursor:
+        song_doc["id"] = str(song_doc.pop("_id"))
+        songs.append(Song(**song_doc))
+    return {"songs": songs}
+
+@app.get("/api/user/recommendations")
+async def get_recommendations(current_user: User = Depends(get_current_user)):
+    cursor = db.songs.find().sort("created_at", -1).limit(6)
+    songs = []
+    async for song_doc in cursor:
+        song_doc["id"] = str(song_doc.pop("_id"))
+        songs.append(Song(**song_doc))
+    return {"songs": songs}
+
+@app.get("/api/user/library")
+async def get_user_library(current_user: User = Depends(get_current_user)):
+    return await get_recent_songs(current_user)
+
+@app.get("/api/browse/categories")
+async def get_categories():
+    cursor = db.categories.find()
+    categories = []
+    async for cat in cursor:
+        cat["_id"] = str(cat["_id"])
+        categories.append(cat)
+    return {"categories": categories}
+
+# Admin endpoints
+@app.get("/api/admin/stats")
+async def get_admin_stats(admin_user: User = Depends(require_admin)):
+    stats = {
+        "users": await db.users.count_documents({}),
+        "songs": await db.songs.count_documents({}),
+        "artists": 0,
+        "albums": 0
+    }
+    return stats
+
+@app.get("/api/admin/songs")
+async def get_admin_songs(admin_user: User = Depends(require_admin)):
+    cursor = db.songs.find().sort("created_at", -1)
+    songs = []
+    async for song_doc in cursor:
+        song_doc["id"] = str(song_doc.pop("_id"))
+        songs.append(Song(**song_doc))
+    return {"songs": songs}
+
+@app.post("/api/admin/upload")
+async def upload_song(
+    title: str = Form(...),
+    artist: str = Form(...),
+    album: Optional[str] = Form(None),
+    genre: Optional[str] = Form(None),
+    audio_url: str = Form(...),
+    cover_url: Optional[str] = Form(None),
+    admin_user: User = Depends(require_admin)
+):
+    song_id = str(uuid.uuid4())
+    song_doc = {
+        "_id": song_id,
+        "title": title,
+        "artist": artist,
+        "album": album,
+        "genre": genre,
+        "duration": 0,
+        "file_url": audio_url,
+        "cover_url": cover_url,
+        "play_count": 0,
+        "created_at": datetime.utcnow(),
+        "uploaded_by": admin_user.id
+    }
+    await db.songs.insert_one(song_doc)
+    return {"message": "Song added successfully", "song_id": song_id}
+
+@app.delete("/api/admin/songs/{song_id}")
+async def delete_song(song_id: str, admin_user: User = Depends(require_admin)):
+    await db.songs.delete_one({"_id": song_id})
+    return {"message": "Song deleted successfully"}
