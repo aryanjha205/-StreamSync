@@ -16,6 +16,10 @@ from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 import webbrowser
 import re
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # FastAPI & dependencies
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect
@@ -51,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 # --- Settings ---
 class Settings:
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/streamsync?retryWrites=true&w=majority")
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     JWT_SECRET = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
@@ -62,8 +66,33 @@ class Settings:
     MAX_FILE_SIZE = 50 * 1024 * 1024
     ALLOWED_AUDIO_TYPES = {".mp3", ".wav", ".flac", ".m4a", ".aac"}
     ALLOWED_IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp"}
+    # Email Settings
+    SMTP_SERVER = "smtp.gmail.com"
+    SMTP_PORT = 587
+    SMTP_USERNAME = "bharatbyte.com@gmail.com"
+    SMTP_PASSWORD = "xbbixxdzmecsvjto" 
 
 settings = Settings()
+
+class EmailManager:
+    @staticmethod
+    def send_email(to_email: str, subject: str, body: str):
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = settings.SMTP_USERNAME
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'html'))
+
+            server = smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT)
+            server.starttls()
+            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            server.send_message(msg)
+            server.quit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send email to {to_email}: {e}")
+            return False
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 os.makedirs(f"{settings.UPLOAD_DIR}/audio", exist_ok=True)
 os.makedirs(f"{settings.UPLOAD_DIR}/images", exist_ok=True)
@@ -96,7 +125,25 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    user: User
+    user: Optional[User] = None
+
+class OTPSend(BaseModel):
+    email: EmailStr
+
+class OTPVerify(BaseModel):
+    email: EmailStr
+    otp: str
+    device_id: str
+
+class AdminLock(BaseModel):
+    code: str
+
+class BroadcastRequest(BaseModel):
+    subject: str
+    message: str
+
+class ThemeUpdate(BaseModel):
+    theme: str
 
 class SongBase(BaseModel):
     title: str
@@ -123,17 +170,21 @@ class SearchResponse(BaseModel):
 # --- Database Manager ---
 class DatabaseManager:
     @staticmethod
+    @staticmethod
     async def init_db():
         global db
+        print(f"DEBUG: Connecting to MongoDB with URI: {settings.MONGODB_URI}")
         print(f"Connecting to MongoDB: {settings.MONGODB_URI[:20]}...")
         try:
-            client = motor.motor_asyncio.AsyncIOMotorClient(
-                settings.MONGODB_URI, 
-                tlsCAFile=certifi.where(),
-                tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=10000,
-                connectTimeoutMS=10000
-            )
+            client_kwargs = {
+                "serverSelectionTimeoutMS": 10000,
+                "connectTimeoutMS": 10000
+            }
+            if "localhost" not in settings.MONGODB_URI and "127.0.0.1" not in settings.MONGODB_URI:
+                client_kwargs["tlsCAFile"] = certifi.where()
+                client_kwargs["tlsAllowInvalidCertificates"] = True
+                
+            client = motor.motor_asyncio.AsyncIOMotorClient(settings.MONGODB_URI, **client_kwargs)
             db = client[settings.DATABASE_NAME]
             # Verify connection
             print("Pinging MongoDB...")
@@ -141,6 +192,8 @@ class DatabaseManager:
             print("Successfully connected to MongoDB!")
             
             await db.users.create_index("email", unique=True)
+            await db.subscribers.create_index("email", unique=True)
+            await db.subscribers.create_index("device_id")
             await db.songs.create_index("title")
             await db.songs.create_index("artist")
             await db.songs.create_index("genre")
@@ -305,10 +358,34 @@ def verify_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
-    payload = verify_token(credentials.credentials)
+    return await _get_user_from_token(credentials.credentials)
+
+async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))) -> Optional[User]:
+    if not credentials:
+        return None
+    try:
+        return await _get_user_from_token(credentials.credentials)
+    except:
+        return None
+
+async def _get_user_from_token(token: str) -> User:
+    payload = verify_token(token)
     user_id = payload.get("sub")
+    token_type = payload.get("type")
+    
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
+        
+    if token_type == "subscription":
+        return User(
+            id=user_id,
+            name=user_id.split('@')[0],
+            email=user_id,
+            role="subscriber",
+            created_at=datetime.utcnow(),
+            is_active=True
+        )
+        
     user = await DatabaseManager.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -439,6 +516,110 @@ async def login(login_data: UserLogin):
         timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     )
     return Token(access_token=access_token, refresh_token=refresh_token, user=user)
+
+# OTP Store (for demo, in-memory)
+otp_store = {}
+
+@app.post("/api/auth/otp/send")
+async def send_otp(data: OTPSend):
+    otp = str(random.randint(100000, 999999))
+    otp_store[data.email] = {
+        "otp": otp,
+        "expires": datetime.utcnow() + timedelta(minutes=10)
+    }
+    
+    # Send actual email
+    subject = "StreamSync OTP Verification"
+    body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f9f9f9; padding: 20px;">
+            <div style="max-width: 600px; margin: 0 auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #1DB954; margin: 0; font-size: 28px;">StreamSync</h1>
+                    <p style="color: #666; font-size: 14px;">Lifetime Premium Access</p>
+                </div>
+                <p>Hello,</p>
+                <p>Verify your email to get lifetime access to all songs, playlists, and premium features on StreamSync.</p>
+                <div style="text-align: center; margin: 40px 0; background: #f4fdf7; padding: 30px; border-radius: 8px; border: 1px dashed #1DB954;">
+                    <p style="margin: 0 0 10px 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your OTP Code</p>
+                    <span style="font-size: 42px; font-weight: 800; letter-spacing: 8px; color: #1DB954;">{otp}</span>
+                </div>
+                <p style="font-size: 14px; color: #666;">This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">
+                    <p>&copy; 2026 StreamSync Music. Experience the rhythm.</p>
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+    
+    # Run email sending in background to avoid blocking
+    success = EmailManager.send_email(data.email, subject, body)
+    
+    if not success:
+        logger.error(f"Failed to send OTP to {data.email}")
+        return {"message": "OTP delivery failed", "debug_otp": otp}
+
+    return {"message": "OTP sent successfully to your email"}
+
+@app.post("/api/auth/otp/verify")
+async def verify_otp(data: OTPVerify):
+    if data.email not in otp_store:
+        raise HTTPException(status_code=400, detail="OTP not sent or expired")
+    
+    stored = otp_store[data.email]
+    if datetime.utcnow() > stored["expires"]:
+        del otp_store[data.email]
+        raise HTTPException(status_code=400, detail="OTP expired")
+    
+    if data.otp != stored["otp"]:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    # Register subscription
+    await db.subscribers.update_one(
+        {"email": data.email},
+        {
+            "$set": {
+                "email": data.email,
+                "device_id": data.device_id,
+                "subscribed_at": datetime.utcnow(),
+                "status": "active"
+            }
+        },
+        upsert=True
+    )
+    
+    # Create a token for the subscriber
+    access_token = create_token(
+        {"sub": data.email, "type": "subscription", "device": data.device_id},
+        timedelta(days=365*10) # "Lifetime" usage
+    )
+    
+    del otp_store[data.email]
+    return {"access_token": access_token, "message": "Subscription verified"}
+
+@app.post("/api/auth/admin/verify")
+async def verify_admin_lock(data: AdminLock):
+    if data.code == "70458":
+        # Create an admin token
+        # Get or create admin user for internal consistency if needed
+        admin_user = await db.users.find_one({"role": "admin"})
+        if not admin_user:
+            # Create a default admin if none exists
+            admin_data = UserCreate(name="System Admin", email="admin@streamsync.com", password="admin_default_pass")
+            admin_user_obj = await DatabaseManager.create_user(admin_data)
+            await db.users.update_one({"_id": admin_user_obj.id}, {"$set": {"role": "admin"}})
+            admin_id = admin_user_obj.id
+        else:
+            admin_id = admin_user["_id"]
+
+        access_token = create_token(
+            {"sub": admin_id, "type": "access", "role": "admin"},
+            timedelta(hours=24)
+        )
+        return {"access_token": access_token, "message": "Admin access granted"}
+    else:
+        raise HTTPException(status_code=401, detail="Invalid admin code")
 
 @app.get("/api/auth/me", response_model=User)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -600,7 +781,16 @@ async def search(q: str, limit: int = 20):
 
 # User endpoints
 @app.get("/api/user/recent")
-async def get_recent_songs(current_user: User = Depends(get_current_user)):
+async def get_recent_songs(current_user: Optional[User] = Depends(get_optional_user)):
+    if not current_user:
+        # For guests, show trending/popular songs
+        cursor = db.songs.find().sort("play_count", -1).limit(6)
+        songs = []
+        async for song_doc in cursor:
+            song_doc["id"] = song_doc.pop("_id")
+            songs.append(Song(**song_doc))
+        return {"songs": songs}
+
     recent_plays = []
     cursor = db.play_history.find(
         {"user_id": current_user.id}
@@ -609,12 +799,14 @@ async def get_recent_songs(current_user: User = Depends(get_current_user)):
     async for play in cursor:
         if play["song_id"] not in song_ids:
             song_ids.append(play["song_id"])
+    
     songs = []
     for song_id in song_ids[:6]:
         song_doc = await db.songs.find_one({"_id": song_id})
         if song_doc:
             song_doc["id"] = song_doc.pop("_id")
             songs.append(Song(**song_doc))
+    
     if not songs:
         cursor = db.songs.find().sort("play_count", -1).limit(6)
         async for song_doc in cursor:
@@ -623,7 +815,8 @@ async def get_recent_songs(current_user: User = Depends(get_current_user)):
     return {"songs": songs}
 
 @app.get("/api/user/recommendations")
-async def get_recommendations(current_user: User = Depends(get_current_user)):
+async def get_recommendations(current_user: Optional[User] = Depends(get_optional_user)):
+    # Default recommendations (recent uploads)
     cursor = db.songs.find().sort("created_at", -1).limit(6)
     songs = []
     async for song_doc in cursor:
@@ -632,10 +825,44 @@ async def get_recommendations(current_user: User = Depends(get_current_user)):
     return {"songs": songs}
 
 @app.get("/api/user/library")
-async def get_user_library(current_user: User = Depends(get_current_user)):
+async def get_user_library(current_user: Optional[User] = Depends(get_optional_user)):
     return await get_recent_songs(current_user)
 
+@app.get("/api/settings/theme")
+async def get_theme():
+    settings_doc = await db.settings.find_one({"id": "global"})
+    return {"theme": settings_doc.get("theme", "default") if settings_doc else "default"}
+
+@app.post("/api/admin/theme")
+async def update_theme(data: ThemeUpdate, admin_user: User = Depends(require_admin)):
+    await db.settings.update_one(
+        {"id": "global"},
+        {"$set": {"theme": data.theme}},
+        upsert=True
+    )
+    return {"message": f"Theme updated to {data.theme}"}
+
 # Admin endpoints
+@app.post("/api/admin/broadcast")
+async def broadcast_email(data: BroadcastRequest, admin_user: User = Depends(require_admin)):
+    # Get all subscribers
+    subscribers = await db.subscribers.find({"status": "active"}).to_list(None)
+    emails = [sub["email"] for sub in subscribers if "email" in sub]
+    
+    if not emails:
+        return {"message": "No active subscribers found", "count": 0}
+
+    success_count = 0
+    for email in emails:
+        if EmailManager.send_email(email, data.subject, data.message):
+            success_count += 1
+            
+    return {
+        "message": f"Broadcast sent to {success_count} subscribers",
+        "total": len(emails),
+        "success": success_count
+    }
+
 @app.get("/api/admin/stats")
 async def get_admin_stats(admin_user: User = Depends(require_admin)):
     stats = {}
@@ -909,6 +1136,6 @@ if __name__ == "__main__":
         "backend:app",
         host="0.0.0.0",
         port=8000,
-        reload=False,
+        reload=True,
         log_level="info"
     )

@@ -40,6 +40,419 @@
             --gradient-card: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-light) 100%);
         }
 
+        /* Festival Themes */
+        body.theme-holi {
+            --primary: #FF1493;
+            --primary-dark: #C71585;
+            --primary-light: #FF69B4;
+            --accent: #FFD700;
+            --bg-dark: #1a0a1a;
+            --bg-darker: #0d050d;
+            --gradient-primary: linear-gradient(135deg, #FF1493, #FFD700);
+        }
+
+        body.theme-diwali {
+            --primary: #FF8C00;
+            --primary-dark: #E67E22;
+            --primary-light: #FFA500;
+            --accent: #800080;
+            --bg-dark: #0f101e;
+            --bg-darker: #05040d;
+            --gradient-primary: linear-gradient(135deg, #FF8C00, #800080);
+        }
+
+        body.theme-eid {
+            --primary: #008000;
+            --primary-dark: #006400;
+            --primary-light: #2ECC71;
+            --accent: #F1C40F;
+            --bg-dark: #050d05;
+            --bg-darker: #020502;
+            --gradient-primary: linear-gradient(135deg, #008000, #F1C40F);
+        }
+
+        body.theme-christmas {
+            --primary: #e74c3c;
+            --primary-dark: #c0392b;
+            --primary-light: #ff7675;
+            --accent: #27ae60;
+            --bg-dark: #0a0e0a;
+            --bg-darker: #000000;
+            --gradient-primary: linear-gradient(135deg, #e74c3c, #27ae60);
+        }
+
+        /* Attractive UI Themes */
+        body.theme-cyberpunk {
+            --primary: #00ff9f;
+            --primary-dark: #00cc80;
+            --primary-light: #33ffb2;
+            --accent: #bc13fe;
+            --bg-dark: #0d0221;
+            --bg-darker: #080112;
+            --bg-card: #150a33;
+            --border: #bc13fe;
+            --gradient-primary: linear-gradient(135deg, #00ff9f, #bc13fe);
+            --shadow: 0 0 30px rgba(188, 19, 254, 0.4);
+            --transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        body.theme-cyberpunk::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.3;
+        }
+
+        body.theme-cyberpunk .page-title {
+            animation: glitch 1s linear infinite;
+            text-shadow: 2px 0 var(--accent), -2px 0 var(--primary);
+        }
+
+        @keyframes glitch {
+
+            2%,
+            64% {
+                transform: translate(2px, 0) skew(0deg);
+            }
+
+            4%,
+            60% {
+                transform: translate(-2px, 0) skew(0deg);
+            }
+
+            62% {
+                transform: translate(0, 0) skew(5deg);
+            }
+        }
+
+        body.theme-cyberpunk .nav-link.active,
+        body.theme-cyberpunk .btn,
+        body.theme-cyberpunk .logo i {
+            text-shadow: 0 0 10px var(--primary);
+            box-shadow: 0 0 20px rgba(0, 255, 159, 0.4);
+            border: 1px solid var(--primary);
+        }
+
+        body.theme-cyberpunk .content-card {
+            background: rgba(21, 10, 51, 0.8);
+            border: 1px solid var(--accent);
+        }
+
+        body.theme-cyberpunk .content-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 30px var(--primary), inset 0 0 15px var(--accent);
+            transform: scale(1.05) translateY(-5px);
+        }
+
+        body.theme-cyberpunk .search-bar:focus-within {
+            box-shadow: 0 0 20px var(--accent);
+            border-color: var(--accent);
+        }
+
+        body.theme-midnight {
+            --primary: #0076ff;
+            --primary-dark: #0056cc;
+            --primary-light: #3391ff;
+            --accent: #ffffff;
+            --bg-dark: #000000;
+            --bg-darker: #000000;
+            --bg-card: #0a0a0a;
+            --border: #1a1a1a;
+            --gradient-primary: linear-gradient(135deg, #0076ff, #00c6ff);
+        }
+
+        body.theme-ocean {
+            --primary: #00d2ff;
+            --primary-dark: #0099cc;
+            --primary-light: #33dbff;
+            --accent: #3a7bd5;
+            --bg-dark: #001219;
+            --bg-darker: #000508;
+            --bg-card: #00212e;
+            --gradient-primary: linear-gradient(135deg, #00d2ff, #3a7bd5);
+        }
+
+        body.theme-sakura {
+            --primary: #ffb7c5;
+            --primary-dark: #ff9aa2;
+            --primary-light: #ffd1dc;
+            --accent: #ffffff;
+            --bg-dark: #1c1416;
+            --bg-darker: #0d0a0b;
+            --bg-card: #2d2224;
+            --gradient-primary: linear-gradient(135deg, #ffb7c5, #ff9aa2);
+        }
+
+        body.theme-gold {
+            --primary: #d4af37;
+            --primary-dark: #aa8822;
+            --primary-light: #f9e076;
+            --accent: #ffffff;
+            --bg-dark: #121212;
+            --bg-darker: #000000;
+            --bg-card: #1a1a1a;
+            --border: #2c2c2c;
+            --gradient-primary: linear-gradient(135deg, #d4af37, #f9e076);
+        }
+
+        /* 10 New Animated Themes */
+        body.theme-lava {
+            --primary: #ff4500;
+            --accent: #ff8c00;
+            --bg-dark: #1a0500;
+            --bg-darker: #0d0200;
+            --gradient-primary: linear-gradient(135deg, #ff4500, #ff8c00);
+        }
+
+        body.theme-lava .page-title {
+            animation: lavaPulse 3s infinite alternate;
+        }
+
+        @keyframes lavaPulse {
+            from {
+                text-shadow: 0 0 10px #ff4500;
+            }
+
+            to {
+                text-shadow: 0 0 30px #ff8c00, 0 0 50px #ff4500;
+            }
+        }
+
+        body.theme-nebula {
+            --primary: #8e44ad;
+            --accent: #3498db;
+            --bg-dark: #0f0c29;
+            --bg-darker: #050414;
+            --gradient-primary: linear-gradient(135deg, #8e44ad, #3498db);
+        }
+
+        body.theme-nebula::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(142, 68, 173, 0.1), transparent 70%);
+            animation: nebulaDrift 10s infinite linear;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes nebulaDrift {
+            0% {
+                transform: scale(1) translate(0, 0);
+            }
+
+            50% {
+                transform: scale(1.2) translate(5%, 5%);
+            }
+
+            100% {
+                transform: scale(1) translate(0, 0);
+            }
+        }
+
+        body.theme-emerald {
+            --primary: #2ecc71;
+            --accent: #1abc9c;
+            --bg-dark: #0a1f14;
+            --bg-darker: #05100a;
+            --gradient-primary: linear-gradient(135deg, #2ecc71, #1abc9c);
+        }
+
+        body.theme-emerald .content-card:hover {
+            animation: emeraldShimmer 1s infinite;
+        }
+
+        @keyframes emeraldShimmer {
+            0% {
+                box-shadow: 0 0 5px #2ecc71;
+            }
+
+            50% {
+                box-shadow: 0 0 20px #1abc9c;
+            }
+
+            100% {
+                box-shadow: 0 0 5px #2ecc71;
+            }
+        }
+
+        body.theme-sunset {
+            --primary: #f39c12;
+            --accent: #e67e22;
+            --bg-dark: #2c3e50;
+            --bg-darker: #1a252f;
+            --gradient-primary: linear-gradient(135deg, #f39c12, #d35400);
+        }
+
+        body.theme-sunset .main-content {
+            background: linear-gradient(180deg, #2c3e50, #000);
+            animation: sunsetFade 10s infinite alternate;
+        }
+
+        @keyframes sunsetFade {
+            0% {
+                filter: hue-rotate(0deg);
+            }
+
+            100% {
+                filter: hue-rotate(20deg) brightness(1.2);
+            }
+        }
+
+        body.theme-frost {
+            --primary: #dff9fb;
+            --accent: #7ed6df;
+            --bg-dark: #130f40;
+            --bg-darker: #0a0820;
+            --gradient-primary: linear-gradient(135deg, #dff9fb, #7ed6df);
+        }
+
+        body.theme-frost .sidebar::after {
+            content: '❄';
+            position: absolute;
+            top: -20px;
+            color: rgba(255, 255, 255, 0.1);
+            font-size: 20px;
+            animation: snowFall 5s infinite linear;
+        }
+
+        @keyframes snowFall {
+            to {
+                transform: translateY(100vh) rotate(360deg);
+            }
+        }
+
+        body.theme-matrix {
+            --primary: #00ff41;
+            --accent: #008f11;
+            --bg-dark: #000000;
+            --bg-darker: #000000;
+            --gradient-primary: linear-gradient(135deg, #00ff41, #008f11);
+        }
+
+        body.theme-matrix::after {
+            content: "10101100101";
+            font-family: monospace;
+            position: fixed;
+            top: 0;
+            left: 0;
+            color: rgba(0, 255, 65, 0.05);
+            font-size: 10px;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            animation: matrixRain 2s infinite linear;
+            white-space: pre;
+        }
+
+        @keyframes matrixRain {
+            from {
+                transform: translateY(-100%);
+            }
+
+            to {
+                transform: translateY(100%);
+            }
+        }
+
+        body.theme-amethyst {
+            --primary: #9b59b6;
+            --accent: #8e44ad;
+            --bg-dark: #1a0f1d;
+            --bg-darker: #0d070e;
+            --gradient-primary: linear-gradient(135deg, #9b59b6, #8e44ad);
+        }
+
+        body.theme-amethyst .logo {
+            animation: amethystBreathe 4s infinite;
+        }
+
+        @keyframes amethystBreathe {
+
+            0%,
+            100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 5px #9b59b6);
+            }
+
+            50% {
+                transform: scale(1.05);
+                filter: drop-shadow(0 0 20px #8e44ad);
+            }
+        }
+
+        body.theme-candy {
+            --primary: #ff78cb;
+            --accent: #78e1ff;
+            --bg-dark: #1f0d19;
+            --bg-darker: #10060d;
+            --gradient-primary: linear-gradient(135deg, #ff78cb, #78e1ff);
+        }
+
+        body.theme-candy .btn:hover {
+            animation: candyBounce 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+
+        @keyframes candyBounce {
+            25% {
+                transform: scale(1.1);
+            }
+
+            50% {
+                transform: scale(0.9);
+            }
+
+            75% {
+                transform: scale(1.05);
+            }
+        }
+
+        body.theme-forest {
+            --primary: #27ae60;
+            --accent: #e67e22;
+            --bg-dark: #1b1f1b;
+            --bg-darker: #0d0f0d;
+            --gradient-primary: linear-gradient(135deg, #27ae60, #2ecc71);
+        }
+
+        body.theme-forest .nav-link:hover {
+            transform: rotate(-1deg) translateX(10px);
+        }
+
+        body.theme-vintage {
+            --primary: #c0392b;
+            --accent: #7f8c8d;
+            --bg-dark: #2c2c2c;
+            --bg-darker: #1a1a1a;
+            --gradient-primary: linear-gradient(135deg, #7f8c8d, #2c3e50);
+            filter: sepia(0.3) contrast(1.1);
+        }
+
+        body.theme-vintage::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://www.transparenttextures.com/patterns/stardust.png');
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -359,23 +772,41 @@
 
         .section-title {
             font-size: 28px;
-            font-weight: 700;
+            font-weight: 800;
             color: var(--text-primary);
-            letter-spacing: -0.01em;
+            letter-spacing: -0.02em;
+            position: relative;
+            padding-left: 16px;
+        }
+
+        .section-title::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 20%;
+            height: 60%;
+            width: 4px;
+            background: var(--gradient-primary);
+            border-radius: 4px;
         }
 
         .section-link {
             color: var(--text-secondary);
             text-decoration: none;
-            font-weight: 500;
-            font-size: 14px;
+            font-weight: 600;
+            font-size: 13px;
             transition: var(--transition);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            padding: 8px 16px;
+            background: var(--bg-hover);
+            border-radius: 50px;
         }
 
         .section-link:hover {
             color: var(--primary);
+            background: var(--bg-light);
+            transform: translateX(-4px);
         }
 
         /* Cards Grid */
@@ -387,15 +818,40 @@
         }
 
         .content-card {
-            background: var(--gradient-card);
-            border-radius: var(--radius);
-            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: var(--radius-large);
+            padding: 16px;
             transition: var(--transition);
             cursor: pointer;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             position: relative;
             overflow: hidden;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .content-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.05), transparent);
+            transform: skewX(-25deg);
+            transition: 0.75s;
+        }
+
+        .content-card:hover::after {
+            left: 150%;
+        }
+
+        .content-card:hover {
+            background: rgba(255, 255, 255, 0.07);
+            transform: translateY(-8px);
+            border-color: rgba(255, 255, 255, 1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
         }
 
         .content-card::before {
@@ -1252,6 +1708,42 @@
             }
         }
 
+        .theme-selector-container {
+            flex: 1;
+            min-width: 200px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--bg-card);
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+
+        .theme-selector-container:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(30, 215, 96, 0.2);
+        }
+
+        .theme-selector-container select {
+            padding: 8px;
+            border: none;
+            background: transparent;
+            font-weight: 700;
+            color: var(--text-primary);
+            flex: 1;
+            outline: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .theme-selector-container select option {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 12px;
+        }
+
         .animate-slide-in {
             animation: slideInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -1457,71 +1949,61 @@
     <!-- Mobile Overlay -->
     <div class="mobile-overlay" onclick="closeMobileMenu()"></div>
 
-    <!-- Authentication Pages -->
-    <div id="auth-container" class="auth-page">
-        <div class="form-container animate-slide-in">
-            <div class="logo" style="justify-content: center; margin-bottom: 48px;">
+    <!-- Subscription Modal -->
+    <div id="subscription-modal" class="modal">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Unlock Premium Features</h3>
+                <button class="close-btn" onclick="closeModal('subscription-modal')" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="logo" style="justify-content: center; margin: 16px 0 32px; cursor: pointer;"
+                onclick="handleLogoClick()">
                 <i class="fas fa-music"></i>
                 <span>StreamSync</span>
             </div>
 
-            <!-- Login Form -->
-            <form id="login-form" style="display: block;">
-                <h2 style="text-align: center; margin-bottom: 16px; font-size: 32px; font-weight: 700;">Welcome Back
-                </h2>
-                <p class="page-subtitle" style="text-align: center; margin-bottom: 32px;">Sign in to your account to
-                    continue listening</p>
-                <div class="form-group">
+            <!-- Subscription Flow -->
+            <form id="subscription-form" style="display: block;">
+                <p class="page-subtitle" style="text-align: center; margin-bottom: 32px;">Enter your email to get
+                    lifetime access on this device</p>
+                <div class="form-group" id="email-group">
                     <label class="form-label">Email Address</label>
-                    <input type="email" class="form-input" placeholder="Enter your email" required>
+                    <input type="email" id="sub-email" class="form-input" placeholder="Enter your email" required>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" class="form-input" placeholder="Enter your password" required>
+                <div class="form-group" id="otp-group" style="display: none;">
+                    <label class="form-label">Enter OTP</label>
+                    <input type="text" id="sub-otp" class="form-input" placeholder="6-digit code" maxlength="6">
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Check your email for the
+                        verification code</p>
                 </div>
-                <button type="submit" class="btn btn-full">
-                    <i class="fas fa-sign-in-alt"></i>
-                    Sign In
+                <button type="button" id="send-otp-btn" class="btn btn-full" onclick="handleSendOTP()">
+                    <i class="fas fa-paper-plane"></i>
+                    Send OTP
+                </button>
+                <button type="button" id="verify-otp-btn" class="btn btn-full" style="display: none;"
+                    onclick="handleVerifyOTP()">
+                    <i class="fas fa-check-circle"></i>
+                    Verify OTP
+                </button>
+                <button type="button" id="back-to-email-btn" class="btn btn-outline btn-full"
+                    style="display: none; margin-top: 16px;" onclick="resetSubForm()">
+                    <i class="fas fa-arrow-left"></i>
+                    Back
                 </button>
                 <div class="auth-toggle">
-                    Don't have an account? <a href="#" onclick="toggleAuth()">Create one now</a>
-                </div>
-            </form>
-
-            <!-- Signup Form -->
-            <form id="signup-form" style="display: none;">
-                <h2 style="text-align: center; margin-bottom: 16px; font-size: 32px; font-weight: 700;">Join StreamSync
-                </h2>
-                <p class="page-subtitle" style="text-align: center; margin-bottom: 32px;">Create your account to start
-                    your music journey</p>
-                <div class="form-group">
-                    <label class="form-label">Full Name</label>
-                    <input type="text" class="form-input" placeholder="Enter your full name" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Email Address</label>
-                    <input type="email" class="form-input" placeholder="Enter your email" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" class="form-input" placeholder="Create a password" required>
-                </div>
-                <button type="submit" class="btn btn-full">
-                    <i class="fas fa-user-plus"></i>
-                    Create Account
-                </button>
-                <div class="auth-toggle">
-                    Already have an account? <a href="#" onclick="toggleAuth()">Sign in here</a>
+                    Lifetime access for a seamless music experience.
                 </div>
             </form>
         </div>
     </div>
 
     <!-- Main App -->
-    <div id="app-container" class="app-container" style="display: none;">
+    <div id="app-container" class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
-            <div class="logo">
+            <div class="logo" style="cursor: pointer;" onclick="handleLogoClick()">
                 <i class="fas fa-music"></i>
                 <span>StreamSync</span>
             </div>
@@ -1552,6 +2034,13 @@
                             <span>Admin Panel</span>
                         </a>
                     </li>
+                    <li class="nav-item" id="subscribe-nav">
+                        <a href="#" class="nav-link" onclick="showModal('subscription-modal')"
+                            style="color: var(--primary); font-weight: 700;">
+                            <i class="fas fa-crown"></i>
+                            <span>Get Premium</span>
+                        </a>
+                    </li>
                 </ul>
             </nav>
 
@@ -1559,7 +2048,7 @@
                 <div class="user-avatar" id="user-avatar">U</div>
                 <div class="user-details">
                     <div class="user-name" id="user-name">User</div>
-                    <div class="user-role" id="user-role">Free Plan</div>
+                    <div class="user-role" id="user-role">Lifetime Access</div>
                     <button class="btn btn-outline" style="padding: 8px 16px; font-size: 12px; margin-top: 8px;"
                         onclick="logout()">
                         <i class="fas fa-sign-out-alt"></i>
@@ -1687,11 +2176,48 @@
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap;">
+                <div style="display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; align-items: center;">
                     <button class="btn" onclick="showUploadModal()">
                         <i class="fas fa-upload"></i>
                         Upload Music
                     </button>
+                    <button class="btn btn-outline" onclick="showBroadcastModal()">
+                        <i class="fas fa-bullhorn"></i>
+                        Broadcast Email
+                    </button>
+
+                    <div class="theme-selector-container">
+                        <i class="fas fa-palette" style="color: var(--primary);"></i>
+                        <select id="festival-theme-select" onchange="handleThemeChange(this.value)">
+                            <option value="default">Default Theme</option>
+                            <optgroup label="Festivals">
+                                <option value="holi">Holi Festive (Pink)</option>
+                                <option value="diwali">Diwali Lights (Orange)</option>
+                                <option value="eid">Eid Crescent (Green)</option>
+                                <option value="christmas">Christmas Spirit (Red)</option>
+                            </optgroup>
+                            <optgroup label="Premium UI">
+                                <option value="cyberpunk">Cyberpunk Neon</option>
+                                <option value="midnight">Midnight OLED</option>
+                                <option value="ocean">Ocean Breeze</option>
+                                <option value="sakura">Sakura Bloom</option>
+                                <option value="gold">Royal Gold</option>
+                            </optgroup>
+                            <optgroup label="Animated Premium">
+                                <option value="lava">Lava Flow (Red)</option>
+                                <option value="nebula">Deep Nebula (Space)</option>
+                                <option value="emerald">Emerald Sparkle</option>
+                                <option value="sunset">Sunset Vibes</option>
+                                <option value="frost">Arctic Frost (Snow)</option>
+                                <option value="matrix">Matrix Code</option>
+                                <option value="amethyst">Amethyst Glow</option>
+                                <option value="candy">Candy Bounce</option>
+                                <option value="forest">Forest Sway</option>
+                                <option value="vintage">Vintage Film</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
                     <button class="btn btn-outline" onclick="loadAdminData()">
                         <i class="fas fa-sync"></i>
                         Refresh Data
@@ -1919,6 +2445,54 @@
         </div>
     </div>
 
+    <!-- Broadcast Modal -->
+    <div class="modal" id="broadcast-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Broadcast Email to Subscribers</h3>
+                <button class="close-btn" onclick="closeModal('broadcast-modal')" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="broadcast-form">
+                <div class="form-group">
+                    <label class="form-label">Subject</label>
+                    <input type="text" class="form-input" id="broadcast-subject"
+                        placeholder="e.g., New Song Added! or Holi Special Offer" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Message (HTML supported)</label>
+                    <textarea class="form-input" id="broadcast-message" rows="8"
+                        placeholder="Enter your message here..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-full">
+                    <i class="fas fa-paper-plane"></i>
+                    Send to All Subscribers
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Lock Modal -->
+    <div id="admin-lock-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Admin Access Required</h3>
+                <button class="close-btn" onclick="closeModal('admin-lock-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Enter Admin Code</label>
+                <input type="password" id="admin-code-input" class="form-input" placeholder="Enter 5-digit code">
+            </div>
+            <button class="btn btn-full" onclick="handleAdminVerify()">
+                <i class="fas fa-unlock-alt"></i>
+                Unlock
+            </button>
+        </div>
+    </div>
+
     <!-- Audio Element -->
     <audio id="audio-player" preload="none"></audio>
 
@@ -1962,6 +2536,21 @@
             sidebar.classList.remove('open');
             overlay.classList.remove('show');
             toggleBtn.innerHTML = '<i class="fas fa-bars"></i>';
+        }
+
+        // Admin Unlock Secret
+        let logoClicks = 0;
+        let lastLogoClick = 0;
+        function handleLogoClick() {
+            const now = Date.now();
+            if (now - lastLogoClick > 2000) logoClicks = 0;
+            logoClicks++;
+            lastLogoClick = now;
+            if (logoClicks >= 5) {
+                logoClicks = 0;
+                showModal('admin-lock-modal');
+                document.getElementById('admin-code-input').focus();
+            }
         }
 
         // Utility Functions
@@ -2021,90 +2610,232 @@
         }
 
         // Authentication
-        function toggleAuth() {
-            const loginForm = document.getElementById('login-form');
-            const signupForm = document.getElementById('signup-form');
+        // Subscription Flow
+        function resetSubForm() {
+            document.getElementById('email-group').style.display = 'block';
+            document.getElementById('otp-group').style.display = 'none';
+            document.getElementById('send-otp-btn').style.display = 'block';
+            document.getElementById('verify-otp-btn').style.display = 'none';
+            document.getElementById('back-to-email-btn').style.display = 'none';
+        }
 
-            if (loginForm.style.display === 'block') {
-                loginForm.style.display = 'none';
-                signupForm.style.display = 'block';
-            } else {
-                loginForm.style.display = 'block';
-                signupForm.style.display = 'none';
+        async function handleSendOTP() {
+            const email = document.getElementById('sub-email').value;
+            if (!email) {
+                showNotification('Please enter your email', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('send-otp-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+            try {
+                const response = await apiCall('/auth/otp/send', {
+                    method: 'POST',
+                    body: JSON.stringify({ email })
+                });
+
+                showNotification('OTP sent to your email! (Debug OTP: ' + response.debug_otp + ')');
+
+                document.getElementById('email-group').style.display = 'none';
+                document.getElementById('otp-group').style.display = 'block';
+                document.getElementById('send-otp-btn').style.display = 'none';
+                document.getElementById('verify-otp-btn').style.display = 'block';
+                document.getElementById('back-to-email-btn').style.display = 'block';
+                document.getElementById('sub-otp').focus();
+            } catch (error) {
+                showNotification('Failed to send OTP. Please try again.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send OTP';
             }
         }
 
-        async function login(email, password) {
+        async function handleVerifyOTP() {
+            const email = document.getElementById('sub-email').value;
+            const otp = document.getElementById('sub-otp').value;
+            const device_id = navigator.userAgent + '-' + Math.random().toString(36).substr(2, 9);
+
+            if (!otp || otp.length < 6) {
+                showNotification('Please enter the 6-digit OTP', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('verify-otp-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+
             try {
-                const response = await apiCall('/auth/login', {
+                const response = await apiCall('/auth/otp/verify', {
                     method: 'POST',
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ email, otp, device_id })
                 });
 
                 authToken = response.access_token;
                 localStorage.setItem('authToken', authToken);
-                currentUser = response.user;
+
+                // Get user info
+                currentUser = await apiCall('/auth/me');
 
                 showApp();
-                showNotification('Welcome back! Ready to discover some great music?');
+                closeModal('subscription-modal');
+                showNotification('Subscription verified! Welcome to lifetime access.');
                 loadHomeData();
             } catch (error) {
-                showNotification('Login failed. Please check your credentials.', 'error');
+                showNotification('Invalid or expired OTP. Please try again.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-circle"></i> Verify OTP';
             }
         }
 
-        async function signup(name, email, password) {
+        async function handleAdminVerify() {
+            const code = document.getElementById('admin-code-input').value;
+            if (!code) return;
+
             try {
-                const response = await apiCall('/auth/register', {
+                const response = await apiCall('/auth/admin/verify', {
                     method: 'POST',
-                    body: JSON.stringify({ name, email, password })
+                    body: JSON.stringify({ code })
                 });
 
-                showNotification('Account created successfully! Please sign in to continue.');
-                toggleAuth();
+                authToken = response.access_token;
+                localStorage.setItem('authToken', authToken);
+
+                currentUser = await apiCall('/auth/me');
+
+                closeModal('admin-lock-modal');
+                showApp();
+                showNotification('Admin access granted!');
+                navigateToPage('admin');
             } catch (error) {
-                showNotification('Registration failed. Please try again.', 'error');
+                showNotification('Invalid admin code!', 'error');
             }
         }
 
-        function logout() {
+        function showBroadcastModal() {
+            document.getElementById('broadcast-subject').value = '';
+            document.getElementById('broadcast-message').value = '';
+            showModal('broadcast-modal');
+        }
+
+        async function handleBroadcast(e) {
+            e.preventDefault();
+            const subject = document.getElementById('broadcast-subject').value;
+            const message = document.getElementById('broadcast-message').value;
+
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+            try {
+                const response = await apiCall('/admin/broadcast', {
+                    method: 'POST',
+                    body: JSON.stringify({ subject, message })
+                });
+
+                showNotification(response.message);
+                closeModal('broadcast-modal');
+            } catch (error) {
+                showNotification('Failed to send broadcast.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to All Subscribers';
+            }
+        }
+
+        async function handleThemeChange(theme) {
+            try {
+                if (authToken && currentUser?.role === 'admin') {
+                    await apiCall('/admin/theme', {
+                        method: 'POST',
+                        body: JSON.stringify({ theme })
+                    });
+                }
+                applyTheme(theme);
+                showNotification(`Theme changed to ${theme.charAt(0).toUpperCase() + theme.slice(1)}`);
+            } catch (error) {
+                showNotification('Failed to update theme.', 'error');
+            }
+        }
+
+        async function loadTheme() {
+            try {
+                const response = await apiCall('/settings/theme');
+                applyTheme(response.theme);
+
+                // Set the dropdown value if it exists
+                const select = document.getElementById('festival-theme-select');
+                if (select) select.value = response.theme;
+            } catch (error) {
+                console.error('Failed to load theme:', error);
+            }
+        }
+
+        function applyTheme(theme) {
+            // Remove all existing theme classes
+            document.body.classList.remove(
+                'theme-holi', 'theme-diwali', 'theme-eid', 'theme-christmas',
+                'theme-cyberpunk', 'theme-midnight', 'theme-ocean', 'theme-sakura', 'theme-gold',
+                'theme-lava', 'theme-nebula', 'theme-emerald', 'theme-sunset', 'theme-frost',
+                'theme-matrix', 'theme-amethyst', 'theme-candy', 'theme-forest', 'theme-vintage'
+            );
+
+            // Add new theme class
+            if (theme !== 'default') {
+                document.body.classList.add(`theme-${theme}`);
+            }
+        }
+
+        function logout(silent = false) {
             authToken = null;
             currentUser = null;
             localStorage.removeItem('authToken');
 
-            document.getElementById('auth-container').style.display = 'flex';
-            document.getElementById('app-container').style.display = 'none';
+            showApp();
             document.getElementById('admin-nav').style.display = 'none';
+            navigateToPage('home');
 
             // Reset player
             pauseAudio();
             currentSong = null;
             updatePlayerUI();
 
-            showNotification('You\'ve been logged out successfully.');
+            if (!silent) {
+                showNotification('You\'ve been logged out successfully.');
+            }
         }
 
         function showApp() {
-            document.getElementById('auth-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'grid';
-
             // Update user info
             const userName = document.getElementById('user-name');
             const userAvatar = document.getElementById('user-avatar');
             const userRole = document.getElementById('user-role');
+            const subscribeNav = document.getElementById('subscribe-nav');
+            const logoutBtn = document.querySelector('.user-info .btn');
 
-            userName.textContent = currentUser.name;
-            userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
-            userRole.textContent = currentUser.role === 'admin' ? 'Admin' : 'Free Plan';
+            if (currentUser) {
+                userName.textContent = currentUser.name;
+                userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
+                userRole.textContent = currentUser.role === 'admin' ? 'Admin' : 'Lifetime Access';
+                subscribeNav.style.display = 'none';
+                logoutBtn.style.display = 'inline-flex';
+            } else {
+                userName.textContent = 'Guest User';
+                userAvatar.textContent = 'G';
+                userRole.textContent = 'Free Account';
+                subscribeNav.style.display = 'block';
+                logoutBtn.style.display = 'none';
+            }
 
             // Show admin nav if user is admin
-            if (currentUser.role === 'admin') {
+            if (currentUser?.role === 'admin') {
                 document.getElementById('admin-nav').style.display = 'block';
             } else {
                 document.getElementById('admin-nav').style.display = 'none';
             }
 
-            // Set greeting based on time
             updateGreeting();
         }
 
@@ -2125,8 +2856,7 @@
         function navigateToPage(pageName) {
             // Security check for admin page
             if (pageName === 'admin' && currentUser?.role !== 'admin') {
-                showNotification('Access denied. Admin privileges required.', 'error');
-                navigateToPage('home');
+                showModal('admin-lock-modal');
                 return;
             }
 
@@ -2273,7 +3003,7 @@
                 return;
             }
 
-            container.innerHTML = songs.map(song => {
+            container.innerHTML = songs.map((song, index) => {
                 let coverImg = '';
                 if (song.cover_url) {
                     const coverUrl = song.cover_url.startsWith('http')
@@ -2283,11 +3013,15 @@
                 } else {
                     coverImg = `<i class="fas fa-music"></i>`;
                 }
+
+                // Encode the entire songs array for state management
+                const playlistJson = JSON.stringify(songs).replace(/'/g, "\\'");
+
                 return `
-                <div class="content-card animate-slide-in" onclick="playSong('${song.id}')">
+                <div class="content-card animate-slide-in" onclick="playSong('${song.id}', ${playlistJson})">
                     <div class="card-image">
                         ${coverImg}
-                        <button class="play-btn" onclick="event.stopPropagation(); playSong('${song.id}')" title="Play ${song.title}">
+                        <button class="play-btn" onclick="event.stopPropagation(); playSong('${song.id}', ${playlistJson})" title="Play ${song.title}">
                             <i class="fas fa-play"></i>
                         </button>
                     </div>
@@ -2348,7 +3082,23 @@
         }
 
         // Audio Player Functions
-        function playSong(songId) {
+        function playSong(songId, queue = null) {
+            if (!authToken) {
+                showModal('subscription-modal');
+                showNotification('Subscription required to play music', 'info');
+                return;
+            }
+
+            if (queue) {
+                currentQueue = queue;
+            }
+
+            // Always update currentIndex if song exists in currentQueue
+            const index = currentQueue.findIndex(s => s.id === songId);
+            if (index !== -1) {
+                currentIndex = index;
+            }
+
             if (currentSong?.id === songId && isPlaying) {
                 pauseAudio();
             } else {
@@ -2422,6 +3172,8 @@
             const currentSongEl = document.getElementById('current-song');
             const currentArtistEl = document.getElementById('current-artist');
             const playerImage = document.querySelector('.player-image');
+            const shuffleBtn = document.getElementById('shuffle-btn');
+            const repeatBtn = document.getElementById('repeat-btn');
 
             if (currentSong) {
                 currentSongEl.textContent = currentSong.title;
@@ -2441,10 +3193,72 @@
             }
 
             playPauseBtn.title = isPlaying ? 'Pause' : 'Play';
+            playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+
+            // Update shuffle/repeat states
+            shuffleBtn.classList.toggle('active', isShuffled);
+
+            if (repeatMode === 0) {
+                repeatBtn.classList.remove('active');
+                repeatBtn.innerHTML = '<i class="fas fa-redo"></i>';
+            } else if (repeatMode === 1) {
+                repeatBtn.classList.add('active');
+                repeatBtn.innerHTML = '<i class="fas fa-redo"></i>';
+            } else {
+                repeatBtn.classList.add('active');
+                repeatBtn.innerHTML = '<i class="fas fa-redo-alt"></i><span style="font-size: 8px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">1</span>';
+            }
+        }
+
+        function playNext() {
+            if (currentQueue.length === 0) return;
+
+            if (repeatMode === 2) { // Repeat one
+                loadAndPlaySong(currentSong.id);
+                return;
+            }
+
+            let nextIndex;
+            if (isShuffled) {
+                nextIndex = Math.floor(Math.random() * currentQueue.length);
+            } else {
+                nextIndex = currentIndex + 1;
+                if (nextIndex >= currentQueue.length) {
+                    if (repeatMode === 1) nextIndex = 0; // Repeat all
+                    else return;
+                }
+            }
+
+            playSong(currentQueue[nextIndex].id);
+        }
+
+        function playPrevious() {
+            if (currentQueue.length === 0) return;
+
+            let prevIndex = currentIndex - 1;
+            if (prevIndex < 0) {
+                if (repeatMode === 1) prevIndex = currentQueue.length - 1;
+                else prevIndex = 0;
+            }
+
+            playSong(currentQueue[prevIndex].id);
+        }
+
+        function toggleShuffle() {
+            isShuffled = !isShuffled;
+            updatePlayerUI();
+            showNotification(isShuffled ? 'Shuffle ON' : 'Shuffle OFF');
+        }
+
+        function toggleRepeat() {
+            repeatMode = (repeatMode + 1) % 3;
+            updatePlayerUI();
+            const modes = ['Repeat OFF', 'Repeat ALL', 'Repeat ONE'];
+            showNotification(modes[repeatMode]);
         }
 
         function updateProgress() {
-            const audioPlayer = document.getElement('audio-player');
+            const audioPlayer = document.getElementById('audio-player');
             const progressFill = document.getElementById('progress-fill');
             const currentTimeEl = document.getElementById('current-time');
             const totalTimeEl = document.getElementById('total-time');
@@ -2519,8 +3333,9 @@
 
                 showNotification('Playlist created successfully!');
                 closeModal('playlist-modal');
-                if (document.getElementById('playlists-page').classList.contains('active')) {
-                    loadPlaylistsData();
+                // Refresh laboratory data if on that page
+                if (document.querySelector('[data-page="library"]').classList.contains('active')) {
+                    loadLibraryData();
                 }
             } catch (error) {
                 showNotification('Failed to create playlist. Please try again.', 'error');
@@ -2609,32 +3424,21 @@
 
         // Event Listeners
         document.addEventListener('DOMContentLoaded', function () {
+            // Initial UI state
+            showApp();
+            loadHomeData();
+            loadTheme();
+
             // Check if user is already logged in
             if (authToken) {
                 apiCall('/auth/me').then(user => {
                     currentUser = user;
-                    showApp();
-                    loadHomeData();
+                    showApp(); // Refresh with user data
                 }).catch(() => {
-                    logout();
+                    logout(true); // Silent logout
                 });
             }
 
-            // Auth forms
-            document.getElementById('login-form').addEventListener('submit', function (e) {
-                e.preventDefault();
-                const email = this.querySelector('input[type="email"]').value;
-                const password = this.querySelector('input[type="password"]').value;
-                login(email, password);
-            });
-
-            document.getElementById('signup-form').addEventListener('submit', function (e) {
-                e.preventDefault();
-                const name = this.querySelector('input[type="text"]').value;
-                const email = this.querySelector('input[type="email"]').value;
-                const password = this.querySelector('input[type="password"]').value;
-                signup(name, email, password);
-            });
 
             // Navigation
             document.querySelectorAll('.nav-link').forEach(link => {
@@ -2675,13 +3479,23 @@
                 }
             });
 
+            document.getElementById('next-btn').addEventListener('click', playNext);
+            document.getElementById('prev-btn').addEventListener('click', playPrevious);
+            document.getElementById('shuffle-btn').addEventListener('click', toggleShuffle);
+            document.getElementById('repeat-btn').addEventListener('click', toggleRepeat);
+
             // Audio player events
             const audioPlayer = document.getElementById('audio-player');
             audioPlayer.addEventListener('timeupdate', updateProgress);
+            audioPlayer.addEventListener('loadedmetadata', updateProgress);
             audioPlayer.addEventListener('ended', function () {
-                isPlaying = false;
-                updatePlayerUI();
-                showNotification('Song ended');
+                if (repeatMode > 0 || currentQueue.length > currentIndex + 1 || isShuffled) {
+                    playNext();
+                } else {
+                    isPlaying = false;
+                    updatePlayerUI();
+                    showNotification('Queue ended');
+                }
             });
             audioPlayer.addEventListener('error', function () {
                 showNotification('Audio failed to load', 'error');
@@ -2697,11 +3511,31 @@
             });
 
             // Volume control
+            const volumeBtn = document.getElementById('volume-btn');
+            let lastVolume = 1;
+
+            volumeBtn.addEventListener('click', function () {
+                if (audioPlayer.volume > 0) {
+                    lastVolume = audioPlayer.volume;
+                    audioPlayer.volume = 0;
+                    volumeBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+                    document.getElementById('volume-fill').style.width = '0%';
+                } else {
+                    audioPlayer.volume = lastVolume || 1;
+                    volumeBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+                    document.getElementById('volume-fill').style.width = `${audioPlayer.volume * 100}%`;
+                }
+            });
+
             document.getElementById('volume-slider').addEventListener('click', function (e) {
                 const rect = this.getBoundingClientRect();
-                const percentage = (e.clientX - rect.left) / rect.width;
+                const percentage = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                 audioPlayer.volume = percentage;
                 document.getElementById('volume-fill').style.width = `${percentage * 100}%`;
+
+                if (percentage > 0.5) volumeBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+                else if (percentage > 0) volumeBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
+                else volumeBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
             });
 
             // Forms
@@ -2741,6 +3575,8 @@
                 };
                 handleEditSubmit(songId, data);
             });
+
+            document.getElementById('broadcast-form').addEventListener('submit', handleBroadcast);
 
             // Modal close on outside click
             document.querySelectorAll('.modal').forEach(modal => {

@@ -1,35 +1,16 @@
-import asyncio
 import motor.motor_asyncio
+import asyncio
 import certifi
-import os
 
-async def test_mongo():
-    uri = "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/"
-    print(f"Testing connection to: {uri}")
+async def test():
+    uri = "mongodb://127.0.0.1:27017"
+    print(f"Testing connection to {uri}")
+    client = motor.motor_asyncio.AsyncIOMotorClient(uri, serverSelectionTimeoutMS=2000)
     try:
-        client = motor.motor_asyncio.AsyncIOMotorClient(
-            uri, 
-            tlsCAFile=certifi.where(),
-            tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=5000
-        )
         await client.admin.command('ping')
-        print("Success: Connected with SSL/Certifi")
-        return
+        print("Ping success!")
     except Exception as e:
-        print(f"Failed with SSL/Certifi: {e}")
-
-    try:
-        print("Retrying without SSL...")
-        client = motor.motor_asyncio.AsyncIOMotorClient(
-            uri,
-            tls=False,
-            serverSelectionTimeoutMS=5000
-        )
-        await client.admin.command('ping')
-        print("Success: Connected without SSL")
-    except Exception as e:
-        print(f"Failed without SSL: {e}")
+        print(f"Ping failed: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(test_mongo())
+    asyncio.run(test())
