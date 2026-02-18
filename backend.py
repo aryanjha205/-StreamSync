@@ -170,54 +170,54 @@ class SearchResponse(BaseModel):
 # --- Database Manager ---
 class DatabaseManager:
     @staticmethod
-    @staticmethod
     async def init_db():
         global db
         print(f"DEBUG: Connecting to MongoDB with URI: {settings.MONGODB_URI}")
         print(f"Connecting to MongoDB: {settings.MONGODB_URI[:20]}...")
-        try:
-            client_kwargs = {
-                "serverSelectionTimeoutMS": 10000,
-                "connectTimeoutMS": 10000
-            }
-            if "localhost" not in settings.MONGODB_URI and "127.0.0.1" not in settings.MONGODB_URI:
-                client_kwargs["tlsCAFile"] = certifi.where()
-                client_kwargs["tlsAllowInvalidCertificates"] = True
-                
-            client = motor.motor_asyncio.AsyncIOMotorClient(settings.MONGODB_URI, **client_kwargs)
-            db = client[settings.DATABASE_NAME]
-            # Verify connection
-            print("Pinging MongoDB...")
-            await client.admin.command('ping')
-            print("Successfully connected to MongoDB!")
+        
+        uris_to_try = [settings.MONGODB_URI]
+        if settings.MONGODB_URI != "mongodb://127.0.0.1:27017":
+            uris_to_try.append("mongodb://127.0.0.1:27017")
             
-            await db.users.create_index("email", unique=True)
-            await db.subscribers.create_index("email", unique=True)
-            await db.subscribers.create_index("device_id")
-            await db.songs.create_index("title")
-            await db.songs.create_index("artist")
-            await db.songs.create_index("genre")
-            await db.playlists.create_index("owner_id")
-            await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
-            logger.info("Database initialized successfully")
-        except Exception as e:
-            print(f"FAILED to connect to MongoDB: {e}")
-            logger.error(f"Database initialization failed: {e}")
-            print("Attempting fallback connection...")
+        last_error = None
+        for uri in uris_to_try:
             try:
-                client = motor.motor_asyncio.AsyncIOMotorClient(
-                    settings.MONGODB_URI,
-                    tls=True,
-                    tlsAllowInvalidCertificates=True,
-                    serverSelectionTimeoutMS=10000
-                )
-                db = client[settings.DATABASE_NAME]
+                print(f"Attempting to connect to: {uri[:40]}...")
+                client_kwargs = {
+                    "serverSelectionTimeoutMS": 5000,
+                    "connectTimeoutMS": 5000
+                }
+                if "localhost" not in uri and "127.0.0.1" not in uri:
+                    client_kwargs["tlsCAFile"] = certifi.where()
+                    client_kwargs["tlsAllowInvalidCertificates"] = True
+                    
+                client = motor.motor_asyncio.AsyncIOMotorClient(uri, **client_kwargs)
+                # Verify connection
                 await client.admin.command('ping')
-                print("Connected to MongoDB (with tlsAllowInvalidCertificates fallback)")
-                logger.info("Connected to Database (with tlsAllowInvalidCertificates fallback)")
-            except Exception as e2:
-                print(f"Fallback connection also failed: {e2}")
-                logger.error(f"Fallback connection failed: {e2}")
+                db = client[settings.DATABASE_NAME]
+                print(f"Successfully connected to MongoDB ({uri[:20]}...)!")
+                
+                await db.users.create_index("email", unique=True)
+                await db.subscribers.create_index("email", unique=True)
+                await db.subscribers.create_index("device_id")
+                await db.songs.create_index("title")
+                await db.songs.create_index("artist")
+                await db.songs.create_index("genre")
+                await db.playlists.create_index("owner_id")
+                await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
+                
+                logger.info(f"Database initialized successfully using {uri[:20]}...")
+                return # Success
+            except Exception as e:
+                print(f"Failed to connect to {uri[:20]}... : {e}")
+                last_error = e
+                continue
+        
+        logger.error(f"All database connection attempts failed. Last error: {last_error}")
+        # Even if it fails, assign a client to avoid attribute errors later, 
+        # though routes will still fail when used.
+        client = motor.motor_asyncio.AsyncIOMotorClient("mongodb://127.0.0.1:27017")
+        db = client[settings.DATABASE_NAME]
 
     @staticmethod
     async def create_user(user_data: UserCreate) -> User:
@@ -472,25 +472,18 @@ async def seed_demo_data():
             demo_data = UserCreate(name="Demo User", email="demo@streamsync.com", password="demo123")
             await DatabaseManager.create_user(demo_data)
             logger.info("Demo user created")
-        categories = [
-            {"id": "pop", "name": "Pop", "color": "#ff6b6b", "icon": "star"},
-            {"id": "rock", "name": "Rock", "color": "#4ecdc4", "icon": "guitar"},
-            {"id": "jazz", "name": "Jazz", "color": "#45b7d1", "icon": "saxophone"},
-            {"id": "electronic", "name": "Electronic", "color": "#f9ca24", "icon": "bolt"},
-            {"id": "classical", "name": "Classical", "color": "#6c5ce7", "icon": "piano"},
-            {"id": "hip-hop", "name": "Hip Hop", "color": "#fd79a8", "icon": "microphone"},
-            {"id": "country", "name": "Country", "color": "#fdcb6e", "icon": "hat-cowboy"},
-            {"id": "blues", "name": "Blues", "color": "#74b9ff", "icon": "music"}
-        ]
-        for category in categories:
-            await db.categories.update_one({"id": category["id"]}, {"$set": category}, upsert=True)
-        logger.info("Demo data seeded successfully")
+        logger.info("Demo data seeded (users only) successfully")
     except Exception as e:
         logger.error(f"Error seeding demo data: {e}")
 
 # --- API Routes ---
 @app.get("/")
 async def root():
+    # Try to serve index.html if it exists in the same directory
+    frontend_path = os.path.join(os.path.dirname(__file__), "index.html")
+    if os.path.exists(frontend_path):
+        from fastapi.responses import FileResponse
+        return FileResponse(frontend_path)
     return {"message": "StreamSync Music API", "version": "1.0.0", "status": "running"}
 
 @app.get("/health")
@@ -1130,8 +1123,17 @@ async def export_users(admin_user: User = Depends(require_admin)):
     return {"users": users, "exported_at": datetime.utcnow()}
 
 if __name__ == "__main__":
-    frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "index.html"))
-    webbrowser.open(f"file://{frontend_path}")
+    # When running locally, we serve the app on localhost:8000
+    print("\n" + "="*50)
+    print("StreamSync Music Streaming Service")
+    print("Access the app at: http://localhost:8000")
+    print("="*50 + "\n")
+    
+    # Optional: auto-open browser
+    try:
+        webbrowser.open("http://localhost:8000")
+    except:
+        pass
     uvicorn.run(
         "backend:app",
         host="0.0.0.0",
