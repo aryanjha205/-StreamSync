@@ -1,0 +1,24 @@
+{
+    "name": "StreamSync Music",
+    "short_name": "StreamSync",
+    "description": "Professional music streaming platform with premium UI and rich features.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0a0a0c",
+    "theme_color": "#1ed760",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/3653/3653139.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/3653/3653139.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "orientation": "portrait"
+}

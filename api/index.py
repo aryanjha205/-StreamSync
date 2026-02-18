@@ -8,7 +8,15 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 import re
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import json
+import logging
+import certifi
 
+# FastAPI & dependencies
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -16,27 +24,19 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
 
+# Database
 import motor.motor_asyncio
 from pymongo.errors import DuplicateKeyError
 from bson import ObjectId
 
+# Caching & utils
 import redis.asyncio as redis
-from PIL import Image
-import mutagen
-import json
-import logging
-import certifi
-
-try:
-    from jose import jwt
-except ImportError:
-    import sys
-    print("\nERROR: python-jose must be installed. Run 'pip install python-jose'.\n")
-    sys.exit(1)
+from jose import jwt
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- Settings ---
 class Settings:
     MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/streamsync?retryWrites=true&w=majority")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
@@ -45,18 +45,42 @@ class Settings:
     JWT_ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 30
     REFRESH_TOKEN_EXPIRE_DAYS = 7
-    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/uploads")
+    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/uploads") # Use /tmp for Vercel
     MAX_FILE_SIZE = 50 * 1024 * 1024
     ALLOWED_AUDIO_TYPES = {".mp3", ".wav", ".flac", ".m4a", ".aac"}
     ALLOWED_IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp"}
+    # Email Settings
+    SMTP_SERVER = "smtp.gmail.com"
+    SMTP_PORT = 587
+    SMTP_USERNAME = "bharatbyte.com@gmail.com"
+    SMTP_PASSWORD = "xbbixxdzmecsvjto" 
 
 settings = Settings()
-try:
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    os.makedirs(os.path.join(settings.UPLOAD_DIR, "audio"), exist_ok=True)
-    os.makedirs(os.path.join(settings.UPLOAD_DIR, "images"), exist_ok=True)
-except Exception as e:
-    logger.warning(f"Could not create upload directories: {e}")
+
+class EmailManager:
+    @staticmethod
+    def send_email(to_email: str, subject: str, body: str):
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = settings.SMTP_USERNAME
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'html'))
+
+            server = smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT)
+            server.starttls()
+            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            server.send_message(msg)
+            server.quit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send email to {to_email}: {e}")
+            return False
+
+# Ensure /tmp directories exist for Vercel
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+os.makedirs(f"{settings.UPLOAD_DIR}/audio", exist_ok=True)
+os.makedirs(f"{settings.UPLOAD_DIR}/images", exist_ok=True)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -64,6 +88,7 @@ security = HTTPBearer()
 db = None
 redis_client = None
 
+# --- Models ---
 class UserBase(BaseModel):
     name: str
     email: EmailStr
@@ -85,7 +110,25 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    user: User
+    user: Optional[User] = None
+
+class OTPSend(BaseModel):
+    email: EmailStr
+
+class OTPVerify(BaseModel):
+    email: EmailStr
+    otp: str
+    device_id: str
+
+class AdminLock(BaseModel):
+    code: str
+
+class BroadcastRequest(BaseModel):
+    subject: str
+    message: str
+
+class ThemeUpdate(BaseModel):
+    theme: str
 
 class SongBase(BaseModel):
     title: str
@@ -109,35 +152,46 @@ class SearchResponse(BaseModel):
     artists: List[Dict[str, Any]]
     albums: List[Dict[str, Any]]
 
+# --- Database Manager ---
 class DatabaseManager:
     @staticmethod
     async def init_db():
         global db
         if db is not None:
             return db
-            
-        try:
-            client = motor.motor_asyncio.AsyncIOMotorClient(
-                settings.MONGODB_URI, 
-                tlsCAFile=certifi.where(),
-                tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=5000,
-                connectTimeoutMS=10000
-            )
-            temp_db = client[settings.DATABASE_NAME]
-            # Verify connection
-            await client.admin.command('ping')
-            
-            # Create indexes (non-blocking)
-            await temp_db.users.create_index("email", unique=True)
-            await temp_db.songs.create_index("title")
-            
-            db = temp_db
-            logger.info("Database initialized successfully")
-            return db
-        except Exception as e:
-            logger.error(f"Database initialization failed: {e}")
-            raise e
+
+        uris_to_try = [settings.MONGODB_URI]
+        # In Vercel, we only try the configured URI (usually Atlas)
+        
+        last_error = None
+        for uri in uris_to_try:
+            try:
+                client_kwargs = {
+                    "serverSelectionTimeoutMS": 5000,
+                    "connectTimeoutMS": 10000
+                }
+                if "localhost" not in uri and "127.0.0.1" not in uri:
+                    client_kwargs["tlsCAFile"] = certifi.where()
+                    client_kwargs["tlsAllowInvalidCertificates"] = True
+                    
+                client = motor.motor_asyncio.AsyncIOMotorClient(uri, **client_kwargs)
+                await client.admin.command('ping')
+                db = client[settings.DATABASE_NAME]
+                
+                # Create indexes
+                await db.users.create_index("email", unique=True)
+                await db.subscribers.create_index("email", unique=True)
+                await db.songs.create_index("title")
+                await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
+                
+                logger.info("Database initialized successfully")
+                return db
+            except Exception as e:
+                logger.error(f"Failed to connect to MongoDB: {e}")
+                last_error = e
+                continue
+        
+        raise last_error
 
     @staticmethod
     async def create_user(user_data: UserCreate) -> User:
@@ -174,93 +228,41 @@ class DatabaseManager:
             return User(id=user_doc["_id"], **user_doc)
         return None
 
-async def get_db():
-    global db
-    if db is None:
-        await DatabaseManager.init_db()
-    return db
-
+# --- Cache Manager ---
 class CacheManager:
     @staticmethod
     async def init_redis():
         global redis_client
-        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-        logger.info("Redis initialized successfully")
+        try:
+            if settings.REDIS_URL:
+                redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+                await asyncio.wait_for(redis_client.ping(), timeout=1.0)
+                logger.info("Redis initialized successfully")
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}. Caching will be disabled.")
+            redis_client = None
 
     @staticmethod
     async def get(key: str) -> Optional[str]:
         try:
-            return await redis_client.get(key)
-        except Exception as e:
-            logger.error(f"Redis get error: {e}")
-            return None
+            if redis_client: return await redis_client.get(key)
+        except: return None
 
     @staticmethod
     async def set(key: str, value: str, expire: int = 3600):
         try:
-            await redis_client.set(key, value, ex=expire)
-        except Exception as e:
-            logger.error(f"Redis set error: {e}")
-
-    @staticmethod
-    async def delete(key: str):
-        try:
-            await redis_client.delete(key)
-        except Exception as e:
-            logger.error(f"Redis delete error: {e}")
+            if redis_client: await redis_client.set(key, value, ex=expire)
+        except: pass
 
     @staticmethod
     async def delete_pattern(pattern: str):
         try:
-            keys = await redis_client.keys(pattern)
-            if keys:
-                await redis_client.delete(*keys)
-        except Exception as e:
-            logger.error(f"Redis delete pattern error: {e}")
+            if redis_client:
+                keys = await redis_client.keys(pattern)
+                if keys: await redis_client.delete(*keys)
+        except: pass
 
-class FileManager:
-    @staticmethod
-    def get_file_hash(file_content: bytes) -> str:
-        return hashlib.md5(file_content).hexdigest()
-
-    @staticmethod
-    async def save_file(file: UploadFile, file_type: str) -> tuple[str, str]:
-        content = await file.read()
-        file_hash = FileManager.get_file_hash(content)
-        filename = f"{file_hash}_{uuid.uuid4().hex[:8]}{os.path.splitext(file.filename)[1]}"
-        file_path = os.path.join(settings.UPLOAD_DIR, file_type, filename)
-        with open(file_path, "wb") as f:
-            f.write(content)
-        return file_path, filename
-
-    @staticmethod
-    def extract_audio_metadata(file_path: str) -> dict:
-        try:
-            audiofile = mutagen.File(file_path)
-            if audiofile is None:
-                return {}
-            return {
-                "duration": int(audiofile.info.length) if audiofile.info else 0,
-                "bitrate": getattr(audiofile.info, 'bitrate', 0),
-                "sample_rate": getattr(audiofile.info, 'sample_rate', 0)
-            }
-        except Exception as e:
-            logger.error(f"Error extracting metadata: {e}")
-            return {}
-
-    @staticmethod
-    async def process_cover_image(file_path: str) -> str:
-        try:
-            with Image.open(file_path) as img:
-                img = img.resize((300, 300), Image.Resampling.LANCZOS)
-                img = img.convert("RGB")
-                optimized_path = file_path.replace(os.path.splitext(file_path)[1], "_opt.jpg")
-                img.save(optimized_path, "JPEG", quality=85, optimize=True)
-                return optimized_path
-        except Exception as e:
-            logger.error(f"Error processing image: {e}")
-            return file_path
-
+# --- Auth Helpers ---
 def create_token(data: dict, expires_delta: timedelta) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + expires_delta
@@ -274,75 +276,52 @@ def verify_token(token: str) -> dict:
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db_instance=Depends(get_db)) -> User:
-    payload = verify_token(credentials.credentials)
+async def _get_user_from_token(token: str) -> User:
+    payload = verify_token(token)
     user_id = payload.get("sub")
+    token_type = payload.get("type")
+    
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
+        
+    if token_type == "subscription":
+        return User(
+            id=user_id,
+            name=user_id.split('@')[0],
+            email=user_id,
+            role="subscriber",
+            created_at=datetime.utcnow(),
+            is_active=True
+        )
+        
     user = await DatabaseManager.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+    return await _get_user_from_token(credentials.credentials)
+
+async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))) -> Optional[User]:
+    if not credentials: return None
+    try: return await _get_user_from_token(credentials.credentials)
+    except: return None
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        try:
-            await websocket.send_text(message)
-        except:
-            self.disconnect(websocket)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections[:]:
-            try:
-                await connection.send_text(message)
-            except:
-                self.disconnect(connection)
-
-manager = ConnectionManager()
-
+# --- App Instance ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # For Vercel, we attempt to init on start, but routes will also ensure init via get_db
-    try:
-        await DatabaseManager.init_db()
-        await CacheManager.init_redis()
-        # Only seed if specifically requested or locally
-        if os.getenv("VERCEL") != "1":
-            await seed_demo_data()
-    except Exception as e:
-        logger.error(f"Lifespan error: {e}")
-    
-    logger.info("Application lifespan started")
+    await DatabaseManager.init_db()
+    await CacheManager.init_redis()
+    await seed_demo_data()
     yield
-    if redis_client:
-        try:
-            await redis_client.close()
-        except:
-            pass
-    logger.info("Application shutdown complete")
+    if redis_client: await redis_client.close()
 
-app = FastAPI(
-    title="StreamSync Music API",
-    description="Production-ready music streaming platform API",
-    version="1.0.0",
-    lifespan=lifespan
-)
+app = FastAPI(title="StreamSync API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -352,6 +331,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- Seeding ---
 async def seed_demo_data():
     try:
         admin_exists = await db.users.find_one({"email": "admin@streamsync.com"})
@@ -359,256 +339,136 @@ async def seed_demo_data():
             admin_data = UserCreate(name="Admin User", email="admin@streamsync.com", password="admin123")
             admin_user = await DatabaseManager.create_user(admin_data)
             await db.users.update_one({"_id": admin_user.id}, {"$set": {"role": "admin"}})
-            logger.info("Admin user created")
-        demo_exists = await db.users.find_one({"email": "demo@streamsync.com"})
-        if not demo_exists:
-            demo_data = UserCreate(name="Demo User", email="demo@streamsync.com", password="demo123")
-            await DatabaseManager.create_user(demo_data)
-            logger.info("Demo user created")
-        categories = [
-            {"id": "pop", "name": "Pop", "color": "#ff6b6b", "icon": "star"},
-            {"id": "rock", "name": "Rock", "color": "#4ecdc4", "icon": "guitar"},
-            {"id": "jazz", "name": "Jazz", "color": "#45b7d1", "icon": "saxophone"},
-            {"id": "electronic", "name": "Electronic", "color": "#f9ca24", "icon": "bolt"},
-            {"id": "classical", "name": "Classical", "color": "#6c5ce7", "icon": "piano"},
-            {"id": "hip-hop", "name": "Hip Hop", "color": "#fd79a8", "icon": "microphone"},
-            {"id": "country", "name": "Country", "color": "#fdcb6e", "icon": "hat-cowboy"},
-            {"id": "blues", "name": "Blues", "color": "#74b9ff", "icon": "music"}
-        ]
-        for category in categories:
-            await db.categories.update_one({"id": category["id"]}, {"$set": category}, upsert=True)
-        logger.info("Demo data seeded successfully")
+        logger.info("Seeding complete")
     except Exception as e:
-        logger.error(f"Error seeding demo data: {e}")
-# --- API Routes ---
-@app.get("/")
-async def root():
-    return {"message": "StreamSync Music API", "version": "1.0.0", "status": "running"}
+        logger.error(f"Seeding error: {e}")
 
+# --- Routes ---
 @app.get("/api/health")
-async def health_check():
+async def health():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
-# Authentication endpoints
 @app.post("/api/auth/register", response_model=User)
-async def register(user_data: UserCreate, db_instance=Depends(get_db)):
-    try:
-        return await DatabaseManager.create_user(user_data)
-    except Exception as e:
-        if isinstance(e, HTTPException): raise e
-        logger.error(f"Registration error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error. Database might be connecting...")
+async def register(user_data: UserCreate):
+    return await DatabaseManager.create_user(user_data)
 
 @app.post("/api/auth/login", response_model=Token)
-async def login(login_data: UserLogin, db_instance=Depends(get_db)):
-    try:
-        user = await DatabaseManager.authenticate_user(login_data.email, login_data.password)
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        
-        access_token = create_token(
-            {"sub": user.id, "type": "access"},
-            timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        )
-        refresh_token = create_token(
-            {"sub": user.id, "type": "refresh"},
-            timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-        )
-        return Token(access_token=access_token, refresh_token=refresh_token, user=user)
-    except Exception as e:
-        if isinstance(e, HTTPException): raise e
-        logger.error(f"Login error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error. Database might be connecting...")
+async def login(login_data: UserLogin):
+    user = await DatabaseManager.authenticate_user(login_data.email, login_data.password)
+    if not user: raise HTTPException(status_code=401, detail="Invalid credentials")
+    access_token = create_token({"sub": user.id, "type": "access"}, timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = create_token({"sub": user.id, "type": "refresh"}, timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))
+    return Token(access_token=access_token, refresh_token=refresh_token, user=user)
 
-@app.get("/api/auth/me", response_model=User)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    return current_user
+otp_store = {}
 
-@app.post("/api/auth/refresh")
-async def refresh_token(token_data: dict):
-    refresh_token = token_data.get("refresh_token")
-    if not refresh_token:
-        raise HTTPException(status_code=400, detail="Refresh token required")
-    payload = verify_token(refresh_token)
-    if payload.get("type") != "refresh":
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
-    user = await DatabaseManager.get_user_by_id(payload.get("sub"))
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    access_token = create_token(
-        {"sub": user.id, "type": "access"},
-        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+@app.post("/api/auth/otp/send")
+async def send_otp(data: OTPSend):
+    otp = str(random.randint(100000, 999999))
+    otp_store[data.email] = {"otp": otp, "expires": datetime.utcnow() + timedelta(minutes=10)}
+    body = f"Your StreamSync OTP is: {otp}"
+    success = EmailManager.send_email(data.email, "StreamSync OTP", body)
+    return {"message": "OTP sent", "debug_otp": otp if not success else None}
 
-# Song endpoints
+@app.post("/api/auth/otp/verify")
+async def verify_otp(data: OTPVerify):
+    if data.email not in otp_store or datetime.utcnow() > otp_store[data.email]["expires"]:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+    if data.otp != otp_store[data.email]["otp"]:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    await db.subscribers.update_one({"email": data.email}, {"$set": {"email": data.email, "device_id": data.device_id, "status": "active"}}, upsert=True)
+    access_token = create_token({"sub": data.email, "type": "subscription"}, timedelta(days=3650))
+    return {"access_token": access_token}
+
+@app.post("/api/auth/admin/verify")
+async def verify_admin(data: AdminLock):
+    if data.code == "70458":
+        admin = await db.users.find_one({"role": "admin"})
+        access_token = create_token({"sub": admin["_id"], "type": "access", "role": "admin"}, timedelta(hours=24))
+        return {"access_token": access_token}
+    raise HTTPException(status_code=401, detail="Invalid code")
+
 @app.get("/api/songs", response_model=List[Song])
-async def get_songs(skip: int = 0, limit: int = 50, db_instance=Depends(get_db)):
-    cached_songs = await CacheManager.get(f"songs:{skip}:{limit}")
-    if cached_songs:
-        return json.loads(cached_songs)
+async def get_songs(skip: int = 0, limit: int = 50):
     cursor = db.songs.find().skip(skip).limit(limit).sort("created_at", -1)
     songs = []
-    async for song_doc in cursor:
-        song_doc["id"] = str(song_doc.pop("_id"))
-        songs.append(Song(**song_doc))
-    await CacheManager.set(f"songs:{skip}:{limit}", json.dumps([song.dict() for song in songs]), 300)
+    async for s in cursor:
+        s["id"] = s.pop("_id")
+        songs.append(Song(**s))
     return songs
 
 @app.get("/api/songs/{song_id}", response_model=Song)
-async def get_song(song_id: str, db_instance=Depends(get_db)):
-    cached_song = await CacheManager.get(f"song:{song_id}")
-    if cached_song:
-        return Song(**json.loads(cached_song))
-    song_doc = await db.songs.find_one({"_id": song_id})
-    if not song_doc:
-        raise HTTPException(status_code=404, detail="Song not found")
-    song_doc["id"] = str(song_doc.pop("_id"))
-    song = Song(**song_doc)
-    await CacheManager.set(f"song:{song_id}", song.json(), 600)
-    return song
+async def get_song(song_id: str):
+    s = await db.songs.find_one({"_id": song_id})
+    if not s: raise HTTPException(status_code=404, detail="Not found")
+    s["id"] = s.pop("_id")
+    return Song(**s)
 
-@app.post("/api/songs/{song_id}/play")
-async def play_song(song_id: str, current_user: User = Depends(get_current_user)):
-    await db.songs.update_one(
-        {"_id": song_id},
-        {"$inc": {"play_count": 1}}
-    )
-    await db.play_history.insert_one({
-        "user_id": current_user.id,
-        "song_id": song_id,
-        "played_at": datetime.utcnow()
-    })
-    await CacheManager.delete(f"song:{song_id}")
-    await CacheManager.delete_pattern("songs:*")
-    return {"message": "Play recorded"}
-
-# Search endpoint
 @app.get("/api/search", response_model=SearchResponse)
-async def search(q: str, limit: int = 20, db_instance=Depends(get_db)):
-    if not q.strip():
-        raise HTTPException(status_code=400, detail="Search query required")
-    try:
-        re.compile(q)
-    except re.error:
-        raise HTTPException(status_code=400, detail="Invalid search query")
-    
-    songs_cursor = db.songs.find({
-        "$or": [
-            {"title": {"$regex": q, "$options": "i"}},
-            {"artist": {"$regex": q, "$options": "i"}},
-            {"album": {"$regex": q, "$options": "i"}},
-            {"genre": {"$regex": q, "$options": "i"}}
-        ]
-    }).limit(limit)
-    
+async def search(q: str, limit: int = 20):
+    songs_cursor = db.songs.find({"$or": [{"title": {"$regex": q, "$options": "i"}}, {"artist": {"$regex": q, "$options": "i"}}]}).limit(limit)
     songs = []
-    async for song_doc in songs_cursor:
-        song_doc["id"] = str(song_doc.pop("_id"))
-        songs.append(Song(**song_doc))
-    
+    async for s in songs_cursor:
+        s["id"] = s.pop("_id")
+        songs.append(Song(**s))
     return SearchResponse(songs=songs, artists=[], albums=[])
 
-# User endpoints
 @app.get("/api/user/recent")
-async def get_recent_songs(current_user: User = Depends(get_current_user)):
+async def get_recent(current_user: Optional[User] = Depends(get_optional_user)):
     cursor = db.songs.find().sort("play_count", -1).limit(6)
     songs = []
-    async for song_doc in cursor:
-        song_doc["id"] = str(song_doc.pop("_id"))
-        songs.append(Song(**song_doc))
+    async for s in cursor:
+        s["id"] = s.pop("_id")
+        songs.append(Song(**s))
     return {"songs": songs}
 
 @app.get("/api/user/recommendations")
-async def get_recommendations(current_user: User = Depends(get_current_user)):
+async def get_recs(current_user: Optional[User] = Depends(get_optional_user)):
     cursor = db.songs.find().sort("created_at", -1).limit(6)
     songs = []
-    async for song_doc in cursor:
-        song_doc["id"] = str(song_doc.pop("_id"))
-        songs.append(Song(**song_doc))
+    async for s in cursor:
+        s["id"] = s.pop("_id")
+        songs.append(Song(**s))
     return {"songs": songs}
 
-@app.get("/api/user/library")
-async def get_user_library(current_user: User = Depends(get_current_user)):
-    return await get_recent_songs(current_user)
+@app.get("/api/settings/theme")
+async def get_theme():
+    settings_doc = await db.settings.find_one({"id": "global"})
+    return {"theme": settings_doc.get("theme", "default") if settings_doc else "default"}
 
-@app.get("/api/browse/categories")
-async def get_categories(db_instance=Depends(get_db)):
-    cursor = db.categories.find()
-    categories = []
-    async for cat in cursor:
-        cat["_id"] = str(cat["_id"])
-        categories.append(cat)
-    return {"categories": categories}
+@app.post("/api/admin/theme")
+async def update_theme(data: ThemeUpdate, admin = Depends(require_admin)):
+    await db.settings.update_one({"id": "global"}, {"$set": {"theme": data.theme}}, upsert=True)
+    return {"message": "Updated"}
 
-# Admin endpoints
 @app.get("/api/admin/stats")
-async def get_admin_stats(admin_user: User = Depends(require_admin)):
-    stats = {
+async def get_stats(admin = Depends(require_admin)):
+    return {
         "users": await db.users.count_documents({}),
         "songs": await db.songs.count_documents({}),
-        "artists": 0,
-        "albums": 0
+        "artists": 0, "albums": 0, "total_plays": 0
     }
-    return stats
 
 @app.get("/api/admin/songs")
-async def get_admin_songs(admin_user: User = Depends(require_admin)):
-    cursor = db.songs.find().sort("created_at", -1)
-    songs = []
-    async for song_doc in cursor:
-        song_doc["id"] = str(song_doc.pop("_id"))
-        songs.append(Song(**song_doc))
-    return {"songs": songs}
+async def admin_songs(admin = Depends(require_admin)):
+    return {"songs": await get_songs()}
 
 @app.post("/api/admin/upload")
-async def upload_song(
-    title: str = Form(...),
-    artist: str = Form(...),
-    album: Optional[str] = Form(None),
-    genre: Optional[str] = Form(None),
-    audio_url: str = Form(...),
-    cover_url: Optional[str] = Form(None),
-    admin_user: User = Depends(require_admin)
+async def admin_upload(
+    title: str = Form(...), artist: str = Form(...), 
+    audio_url: str = Form(...), cover_url: str = Form(None),
+    admin = Depends(require_admin)
 ):
     song_id = str(uuid.uuid4())
-    song_doc = {
-        "_id": song_id,
-        "title": title,
-        "artist": artist,
-        "album": album,
-        "genre": genre,
-        "duration": 0,
-        "file_url": audio_url,
-        "cover_url": cover_url,
-        "play_count": 0,
-        "created_at": datetime.utcnow(),
-        "uploaded_by": admin_user.id
-    }
-    await db.songs.insert_one(song_doc)
-    return {"message": "Song added successfully", "song_id": song_id}
-
-@app.put("/api/admin/songs/{song_id}")
-async def update_song(
-    song_id: str,
-    song_data: SongBase,
-    admin_user: User = Depends(require_admin)
-):
-    song_doc = await db.songs.find_one({"_id": song_id})
-    if not song_doc:
-        raise HTTPException(status_code=404, detail="Song not found")
-    update_data = song_data.dict(exclude_unset=True)
-    await db.songs.update_one(
-        {"_id": song_id},
-        {"$set": update_data}
-    )
-    await CacheManager.delete(f"song:{song_id}")
-    await CacheManager.delete_pattern("songs:*")
-    return {"message": "Song updated successfully"}
+    await db.songs.insert_one({
+        "_id": song_id, "title": title, "artist": artist, 
+        "file_url": audio_url, "cover_url": cover_url,
+        "play_count": 0, "created_at": datetime.utcnow(), "uploaded_by": admin.id
+    })
+    return {"song_id": song_id}
 
 @app.delete("/api/admin/songs/{song_id}")
-async def delete_song(song_id: str, admin_user: User = Depends(require_admin)):
+async def admin_delete(song_id: str, admin = Depends(require_admin)):
     await db.songs.delete_one({"_id": song_id})
-    await CacheManager.delete(f"song:{song_id}")
-    await CacheManager.delete_pattern("songs:*")
-    return {"message": "Song deleted successfully"}
+    return {"message": "Deleted"}
