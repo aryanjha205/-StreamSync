@@ -2486,9 +2486,7 @@
         let repeatMode = 0; // 0: off, 1: all, 2: one
 
         // API Configuration
-        const API_BASE = window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://localhost:8000/api'
-            : '/api';
+        const API_BASE = '/api';
         let authToken = localStorage.getItem('authToken');
 
         // Mobile Menu Functions
