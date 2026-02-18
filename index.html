@@ -2588,9 +2588,16 @@
                     const errorText = await response.text();
                     throw new Error(errorText || `Error ${response.status}`);
                 }
-                return await response.json();
+                const data = await response.json();
+                // Safety check for songs/artists/albums to prevent UI crashes
+                if (endpoint.includes('/user/') && !data.songs) data.songs = [];
+                return data;
             } catch (error) {
                 console.error(`API Error (${endpoint}):`, error);
+                // Return fallback data for specific endpoints to keep UI alive
+                if (endpoint.includes('/user/recent') || endpoint.includes('/user/recommendations')) {
+                    return { songs: [] };
+                }
                 throw error;
             }
         }
