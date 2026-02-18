@@ -1,39 +1,21 @@
 {
   "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/index.py",
-      "use": "@vercel/python"
+      "source": "/api/(.*)",
+      "destination": "api/index.py"
     },
     {
-      "src": "index.html",
-      "use": "@vercel/static"
+      "source": "/manifest.json",
+      "destination": "/manifest.json"
     },
     {
-      "src": "manifest.json",
-      "use": "@vercel/static"
+      "source": "/sw.js",
+      "destination": "/sw.js"
     },
     {
-      "src": "sw.js",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/manifest.json",
-      "dest": "/manifest.json"
-    },
-    {
-      "src": "/sw.js",
-      "dest": "/sw.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -2036,6 +2036,9 @@
                     <div>
                         <h1 class="page-title">Good evening</h1>
                         <p class="page-subtitle">Discover your next favorite song</p>
+                        <div id="api-status" style="font-size: 11px; margin-top: 8px; color: var(--text-muted);">
+                            API Status: <span id="api-indicator">Checking...</span>
+                        </div>
                     </div>
                     <div class="search-container">
                         <div class="search-bar">
@@ -3575,7 +3578,24 @@
 
             // Update greeting periodically
             setInterval(updateGreeting, 60000); // Every minute
+
+            // Check API Health
+            checkApiHealth();
         });
+
+        async function checkApiHealth() {
+            const indicator = document.getElementById('api-indicator');
+            if (!indicator) return;
+            try {
+                const response = await apiCall('/health');
+                indicator.textContent = 'Online';
+                indicator.style.color = 'var(--primary)';
+                indicator.style.fontWeight = '700';
+            } catch (error) {
+                indicator.textContent = 'Offline (Connection Error)';
+                indicator.style.color = 'var(--error)';
+            }
+        }
 
         // Placeholder functions for future features
         function browseCategory(categoryId) {
