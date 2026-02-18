@@ -1,11 +1,9 @@
 fastapi
-uvicorn
-PyJWT
-passlib[bcrypt]
 motor
-pymongo
-redis
-pillow
-mutagen
 certifi
 dnspython
+pydantic[email]
+PyJWT
+passlib[bcrypt]
+pymongo
+uvicorn
