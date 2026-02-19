@@ -9,3 +9,4 @@ pillow
 mutagen
 certifi
 dnspython
+httpx
