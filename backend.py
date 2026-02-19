@@ -196,14 +196,15 @@ class SongAPI:
 
 # --- Settings ---
 class Settings:
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017")
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/streamsync?retryWrites=true&w=majority")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
     JWT_SECRET = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
     JWT_ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 30
     REFRESH_TOKEN_EXPIRE_DAYS = 7
-    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./uploads")
+    IS_VERCEL = "VERCEL" in os.environ
+    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/uploads" if IS_VERCEL else "./uploads")
     MAX_FILE_SIZE = 50 * 1024 * 1024
     ALLOWED_AUDIO_TYPES = {".mp3", ".wav", ".flac", ".m4a", ".aac"}
     ALLOWED_IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp"}
@@ -234,9 +235,13 @@ class EmailManager:
         except Exception as e:
             logger.error(f"Failed to send email to {to_email}: {e}")
             return False
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-os.makedirs(f"{settings.UPLOAD_DIR}/audio", exist_ok=True)
-os.makedirs(f"{settings.UPLOAD_DIR}/images", exist_ok=True)
+
+try:
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    os.makedirs(f"{settings.UPLOAD_DIR}/audio", exist_ok=True)
+    os.makedirs(f"{settings.UPLOAD_DIR}/images", exist_ok=True)
+except Exception as e:
+    logger.warning(f"Could not create upload directories: {e}")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -615,16 +620,21 @@ async def login(login_data: UserLogin):
     )
     return Token(access_token=access_token, refresh_token=refresh_token, user=user)
 
-# OTP Store (for demo, in-memory)
-otp_store = {}
+# OTP handling is now database-backed for Vercel persistence
 
 @app.post("/api/auth/otp/send")
 async def send_otp(data: OTPSend):
     otp = str(random.randint(100000, 999999))
-    otp_store[data.email] = {
-        "otp": otp,
-        "expires": datetime.utcnow() + timedelta(minutes=10)
-    }
+    await db.otps.update_one(
+        {"email": data.email},
+        {
+            "$set": {
+                "otp": otp,
+                "expires": datetime.utcnow() + timedelta(minutes=10)
+            }
+        },
+        upsert=True
+    )
     
     # Send actual email
     subject = "StreamSync OTP Verification"
@@ -662,16 +672,19 @@ async def send_otp(data: OTPSend):
 
 @app.post("/api/auth/otp/verify")
 async def verify_otp(data: OTPVerify):
-    if data.email not in otp_store:
+    stored = await db.otps.find_one({"email": data.email})
+    if not stored:
         raise HTTPException(status_code=400, detail="OTP not sent or expired")
     
-    stored = otp_store[data.email]
     if datetime.utcnow() > stored["expires"]:
-        del otp_store[data.email]
+        await db.otps.delete_one({"email": data.email})
         raise HTTPException(status_code=400, detail="OTP expired")
     
     if data.otp != stored["otp"]:
         raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    # Clean up OTP
+    await db.otps.delete_one({"email": data.email})
     
     # Register subscription
     await db.subscribers.update_one(

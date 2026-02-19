@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-PyJWT
+python-jose[cryptography]
 passlib[bcrypt]
 motor
 pymongo
@@ -10,3 +10,4 @@ mutagen
 certifi
 dnspython
 httpx
+python-multipart
