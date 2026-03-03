@@ -2679,8 +2679,11 @@
             if (currentUser) {
                 userName.textContent = currentUser.name;
                 userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
-                userRole.textContent = currentUser.role === 'admin' ? 'Admin' : 'Lifetime Access';
-                subscribeNav.style.display = 'none';
+
+                const isPremium = currentUser.role === 'admin' || currentUser.role === 'subscriber';
+                userRole.textContent = currentUser.role === 'admin' ? 'System Admin' : (isPremium ? 'Premium Member' : 'Free Account');
+
+                subscribeNav.style.display = isPremium ? 'none' : 'block';
                 logoutBtn.style.display = 'inline-flex';
             } else {
                 userName.textContent = 'Guest User';
@@ -2994,21 +2997,41 @@
 
         // Audio Player Functions
         function playSong(songId, queue = null) {
-
             if (queue) {
                 currentQueue = queue;
             }
 
+            // Check if premium (admin or subscriber)
+            const isPremium = currentUser && (currentUser.role === 'admin' || currentUser.role === 'subscriber');
+
+            let targetSongId = songId;
+
+            // If not premium, pick a random song from the queue instead of the requested one
+            if (!isPremium && currentQueue.length > 0) {
+                // Find index of requested song - if it's already playing, allow toggle
+                const requestedIndex = currentQueue.findIndex(s => s.id === songId);
+
+                if (currentSong?.id === songId) {
+                    // Just toggle if it's the same song
+                    targetSongId = songId;
+                } else {
+                    // Pick random
+                    const randomIndex = Math.floor(Math.random() * currentQueue.length);
+                    targetSongId = currentQueue[randomIndex].id;
+                    showNotification('Free Account: Premium required for specific song access. Playing random song!', 'info');
+                }
+            }
+
             // Always update currentIndex if song exists in currentQueue
-            const index = currentQueue.findIndex(s => s.id === songId);
+            const index = currentQueue.findIndex(s => s.id === targetSongId);
             if (index !== -1) {
                 currentIndex = index;
             }
 
-            if (currentSong?.id === songId && isPlaying) {
+            if (currentSong?.id === targetSongId && isPlaying) {
                 pauseAudio();
             } else {
-                loadAndPlaySong(songId);
+                loadAndPlaySong(targetSongId);
             }
         }
 
