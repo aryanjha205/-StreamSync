@@ -3001,37 +3001,23 @@
                 currentQueue = queue;
             }
 
-            // Check if premium (admin or subscriber)
+            // Check if premium
             const isPremium = currentUser && (currentUser.role === 'admin' || currentUser.role === 'subscriber');
 
-            let targetSongId = songId;
-
-            // If not premium, pick a random song from the queue instead of the requested one
-            if (!isPremium && currentQueue.length > 0) {
-                // Find index of requested song - if it's already playing, allow toggle
-                const requestedIndex = currentQueue.findIndex(s => s.id === songId);
-
-                if (currentSong?.id === songId) {
-                    // Just toggle if it's the same song
-                    targetSongId = songId;
-                } else {
-                    // Pick random
-                    const randomIndex = Math.floor(Math.random() * currentQueue.length);
-                    targetSongId = currentQueue[randomIndex].id;
-                    showNotification('Free Account: Premium required for specific song access. Playing random song!', 'info');
-                }
+            if (!isPremium) {
+                showNotification('Enjoying StreamSync Free? Premium accounts get ad-free and HD music!', 'info');
             }
 
             // Always update currentIndex if song exists in currentQueue
-            const index = currentQueue.findIndex(s => s.id === targetSongId);
+            const index = currentQueue.findIndex(s => s.id === songId);
             if (index !== -1) {
                 currentIndex = index;
             }
 
-            if (currentSong?.id === targetSongId && isPlaying) {
+            if (currentSong?.id === songId && isPlaying) {
                 pauseAudio();
             } else {
-                loadAndPlaySong(targetSongId);
+                loadAndPlaySong(songId);
             }
         }
 

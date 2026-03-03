@@ -114,25 +114,31 @@ class SongAPI:
 
     @staticmethod
     async def get_song_details(song_id: str) -> Optional[Dict[str, Any]]:
-        try:
-            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, verify=False) as client:
-                # The API uses 'ids' (plural) even for a single song
-                url = f"{SongAPI.BASE_URL if SongAPI.BASE_URL.endswith('/') else SongAPI.BASE_URL + '/'}songs"
-                logger.info(f"SongAPI: Fetching details for {song_id} from {url}")
-                response = await client.get(url, params={"ids": song_id})
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, dict) and data.get("success") and data.get("data"):
-                        return data.get("data")[0]
-                    elif isinstance(data, list) and len(data) > 0:
-                        return data[0]
-                else:
-                    logger.warning(f"SongAPI Details: {url} returned {response.status_code} for id {song_id}")
-                return None
-        except Exception as e:
-            logger.error(f"SongAPI Details Error: {e}")
-            return None
+        # List of endpoints to try for details
+        base_urls = ["https://saavn.sumit.co/api", "https://saavn.dev/api", "https://saavn.me/api", "https://jiosaavn-api.vercel.app/api"]
+        
+        for base in base_urls:
+            url = f"{base if base.endswith('/') else base + '/'}songs"
+            try:
+                async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, verify=False) as client:
+                    response = await client.get(url, params={"ids": song_id})
+                    if response.status_code == 200:
+                        data = response.json()
+                        # Handle varied JSON structures
+                        if isinstance(data, dict):
+                            if data.get("data") and isinstance(data["data"], list) and len(data["data"]) > 0:
+                                return data["data"][0]
+                            elif data.get("results") and isinstance(data["results"], list) and len(data["results"]) > 0:
+                                return data["results"][0]
+                        elif isinstance(data, list) and len(data) > 0:
+                            return data[0]
+            except Exception as e:
+                logger.debug(f"SongAPI Details Error at {base}: {e}")
+                continue
+
+        # Last resort: if we have a song ID, try a direct search for it if possible, 
+        # but usually the ID is API-specific.
+        return None
 
     @staticmethod
     def map_to_song_model(api_song: Dict[str, Any]) -> Dict[str, Any]:
@@ -141,11 +147,30 @@ class SongAPI:
         title = api_song.get("name") or api_song.get("title") or api_song.get("song")
         
         # Artist handling
-        artist_data = api_song.get("primaryArtists") or api_song.get("singers") or api_song.get("artist", "Unknown Artist")
-        if isinstance(artist_data, list):
-            artist = ", ".join([a.get("name") if isinstance(a, dict) else str(a) for a in artist_data])
-        else:
-            artist = str(artist_data)
+        # Support various API formats (sumit.co, saavn.dev, etc.)
+        artist_source = api_song.get("primaryArtists") or api_song.get("singers") or api_song.get("artist") or api_song.get("artists")
+        
+        artist = "Unknown Artist"
+        if isinstance(artist_source, list) and artist_source:
+            # Handle list of strings or list of dicts with 'name'
+            names = []
+            for a in artist_source:
+                if isinstance(a, dict):
+                    names.append(a.get("name") or a.get("title") or "Unknown")
+                else:
+                    names.append(str(a))
+            artist = ", ".join(names)
+        elif isinstance(artist_source, dict):
+            # Handle some APIs returning a dict with primary/featured lists
+            primary = artist_source.get("primary", [])
+            if isinstance(primary, list) and primary:
+                artist = ", ".join([p.get("name", "Unknown") if isinstance(p, dict) else str(p) for p in primary])
+            else:
+                artist = artist_source.get("name") or "Unknown Artist"
+        elif isinstance(artist_source, str) and artist_source.strip():
+            artist = artist_source
+        elif "primaryArtists" in api_song and api_song["primaryArtists"]:
+            artist = api_song["primaryArtists"]
 
         # Album handling
         album_obj = api_song.get("album")
@@ -234,9 +259,11 @@ class EmailManager:
         except Exception as e:
             logger.error(f"Failed to send email to {to_email}: {e}")
             return False
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-os.makedirs(f"{settings.UPLOAD_DIR}/audio", exist_ok=True)
-os.makedirs(f"{settings.UPLOAD_DIR}/images", exist_ok=True)
+# Handle directory creation carefully for Vercel
+if not os.environ.get("VERCEL"):
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    os.makedirs(f"{settings.UPLOAD_DIR}/audio", exist_ok=True)
+    os.makedirs(f"{settings.UPLOAD_DIR}/images", exist_ok=True)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
