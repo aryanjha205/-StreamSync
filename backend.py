@@ -774,7 +774,7 @@ async def verify_admin_lock(data: AdminLock):
         else:
             if admin_user.get("role") != "admin":
                 await db.users.update_one({"_id": admin_user["_id"]}, {"$set": {"role": "admin"}})
-            admin_id = admin_user["_id"]
+            admin_id = str(admin_user["_id"])
 
         access_token = create_token(
             {"sub": admin_id, "type": "access", "role": "admin"},

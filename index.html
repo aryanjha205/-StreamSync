@@ -2244,6 +2244,19 @@
         </div>
 
         <div class="player-volume">
+            <button class="control-btn" id="share-btn" title="Share Song" style="margin-right:8px; display:none;"
+                onclick="shareCurrentSong()">
+                <i class="fas fa-share-alt"></i>
+            </button>
+            <button class="control-btn" id="speed-btn" title="Playback Speed"
+                style="margin-right:8px; font-size:12px; font-weight:bold; display:none;"
+                onclick="cyclePlaybackSpeed()">
+                1x
+            </button>
+            <button class="control-btn" id="download-btn" title="Download Track" style="margin-right:8px; display:none;"
+                onclick="downloadCurrentSong()">
+                <i class="fas fa-download"></i>
+            </button>
             <button class="control-btn" id="volume-btn" title="Volume">
                 <i class="fas fa-volume-up"></i>
             </button>
@@ -2381,6 +2394,7 @@
         let isShuffled = false;
         let repeatMode = 0; // 0: off, 1: all, 2: one
         let userFavorites = [];
+        let playbackSpeed = 1.0;
 
         async function loadFavorites() {
             if (!authToken) return;
@@ -3197,6 +3211,9 @@
             if (currentSong) {
                 currentSongEl.textContent = currentSong.title;
                 currentArtistEl.textContent = currentSong.artist;
+                document.getElementById('download-btn').style.display = 'inline-block';
+                document.getElementById('share-btn').style.display = 'inline-block';
+                document.getElementById('speed-btn').style.display = 'inline-block';
 
                 // Update player cover image
                 if (currentSong.cover_url) {
@@ -3209,6 +3226,30 @@
                 }
             } else {
                 playerImage.innerHTML = `<i class="fas fa-music"></i>`;
+                document.getElementById('download-btn').style.display = 'none';
+                document.getElementById('share-btn').style.display = 'none';
+                document.getElementById('speed-btn').style.display = 'none';
+            }
+
+            // Update Media Session API for Lock Screen Controls
+            if ('mediaSession' in navigator && currentSong) {
+                let artworkUrl = currentSong.cover_url || '';
+                if (artworkUrl && !artworkUrl.startsWith('http')) {
+                    artworkUrl = `${API_BASE.replace('/api', '')}${artworkUrl}`;
+                }
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: currentSong.title,
+                    artist: currentSong.artist,
+                    album: currentSong.album || 'StreamSync',
+                    artwork: [
+                        { src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }
+                    ]
+                });
+
+                navigator.mediaSession.setActionHandler('play', function () { resumeAudio(); });
+                navigator.mediaSession.setActionHandler('pause', function () { pauseAudio(); });
+                navigator.mediaSession.setActionHandler('previoustrack', function () { playPrevious(); });
+                navigator.mediaSession.setActionHandler('nexttrack', function () { playNext(); });
             }
 
             playPauseBtn.title = isPlaying ? 'Pause' : 'Play';
@@ -3249,6 +3290,59 @@
             }
 
             playSong(currentQueue[nextIndex].id);
+        }
+
+        function downloadCurrentSong() {
+            if (!currentSong || !currentSong.file_url) return;
+
+            // Check if user is premium to allow downloads
+            const isPremium = currentUser && (currentUser.role === 'admin' || currentUser.role === 'subscriber');
+            if (!isPremium) {
+                showModal('subscription-modal');
+                showNotification('Premium required to download tracks for offline listening.', 'info');
+                return;
+            }
+
+            const a = document.createElement('a');
+            a.href = currentSong.file_url;
+            a.download = `${currentSong.title} - ${currentSong.artist}.m4a`;
+            a.target = "_blank";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showNotification(`Downloading ${currentSong.title}...`);
+        }
+
+        async function shareCurrentSong() {
+            if (!currentSong) return;
+            // The URL could be a deep link to the song if you had routing, right now we just use app link
+            const title = `${currentSong.title} by ${currentSong.artist}`;
+            const text = `Listen to ${title} on StreamSync!`;
+            const url = window.location.origin;
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({ title, text, url });
+                } catch (err) {
+                    console.error('Share failed', err);
+                }
+            } else {
+                navigator.clipboard.writeText(`${text} ${url}`);
+                showNotification('Link copied to clipboard!');
+            }
+        }
+
+        function cyclePlaybackSpeed() {
+            const speeds = [1.0, 1.25, 1.5, 2.0, 0.5];
+            const currentIndex = speeds.indexOf(playbackSpeed);
+            playbackSpeed = speeds[(currentIndex + 1) % speeds.length];
+
+            const audioPlayer = document.getElementById('audio-player');
+            audioPlayer.playbackRate = playbackSpeed;
+
+            const speedBtn = document.getElementById('speed-btn');
+            speedBtn.textContent = playbackSpeed + 'x';
+            showNotification(`Playback speed set to ${playbackSpeed}x`);
         }
 
         function playPrevious() {
