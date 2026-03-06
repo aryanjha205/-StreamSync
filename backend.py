@@ -61,28 +61,28 @@ class SongAPI:
     @staticmethod
     async def search_songs(query: str, limit: int = 20) -> List[Dict[str, Any]]:
         logger.info(f"SongAPI: Searching for '{query}'")
-        # Confirmed working URL: https://saavn.sumit.co/api
+        # Reliable public endpoints
         base_urls = [
-            "https://saavn.sumit.co/api",
             "https://saavn.dev/api",
             "https://jiosaavn-api.vercel.app/api",
+            "https://saavn.sumit.co/api",
             "https://saavn.me/api"
         ]
         
         for base in base_urls:
-            # We already know saavn.sumit.co/api needs /search/songs
-            paths = ["/search/songs", "/search", "songs"]
+            # Try both standard and search paths
+            paths = ["/search/songs", "/search"]
             for path in paths:
                 try:
-                    full_url = f"{base if base.endswith('/') else base + '/'}{path.lstrip('/')}"
+                    full_url = f"{base.rstrip('/')}/{path.lstrip('/')}"
                     logger.info(f"SongAPI: Trying {full_url}")
-                    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, verify=False) as client:
+                    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, verify=False) as client:
                         response = await client.get(full_url, params={"query": query, "limit": limit})
                         if response.status_code == 200:
                             data = response.json()
                             results = []
                             if isinstance(data, dict):
-                                if data.get("success") or str(data.get("status")).lower() == "success":
+                                if data.get("success") or str(data.get("status")).lower() == "success" or data.get("data"):
                                     d = data.get("data", {})
                                     if isinstance(d, dict):
                                         results = d.get("results", [])
@@ -97,15 +97,11 @@ class SongAPI:
                             
                             if results:
                                 logger.info(f"SongAPI: Found {len(results)} results from {full_url}")
-                                # Store working base for next calls
-                                SongAPI.BASE_URL = base
                                 return results
-                        else:
-                            logger.debug(f"SongAPI {full_url} returned {response.status_code}")
                 except Exception as e:
-                    logger.debug(f"SongAPI error {base}{path}: {e}")
+                    logger.debug(f"SongAPI error at {base}{path}: {e}")
                     continue
-        logger.warning(f"SongAPI: No results found for '{query}' after trying all sources")
+        logger.warning(f"SongAPI: No results found for '{query}'")
         return []
 
 
@@ -353,28 +349,31 @@ class DatabaseManager:
                 print(f"Attempting to connect to: {uri[:40]}...")
                 client_kwargs = {
                     "serverSelectionTimeoutMS": 5000,
-                    "connectTimeoutMS": 5000
+                    "connectTimeoutMS": 5000,
+                    "retryWrites": True
                 }
-                if "localhost" not in uri and "127.0.0.1" not in uri:
-                    client_kwargs["tlsCAFile"] = certifi.where()
-                    client_kwargs["tlsAllowInvalidCertificates"] = True
+                
+                # Check for Atlas connection
+                if "mongodb+srv" in uri or ("cluster" in uri and "mongodb.net" in uri):
+                    client_kwargs["tls"] = True
+                    # tlsCAFile is usually required for Atlas on some environments
+                    try:
+                        client_kwargs["tlsCAFile"] = certifi.where()
+                    except:
+                        pass
                     
                 client = motor.motor_asyncio.AsyncIOMotorClient(uri, **client_kwargs)
-                # Verify connection
-                await client.admin.command('ping')
+                # Verify connection with a short timeout
+                await asyncio.wait_for(client.admin.command('ping'), timeout=5.0)
                 db = client[settings.DATABASE_NAME]
-                print(f"Successfully connected to MongoDB ({uri[:20]}...)!")
+                print(f"Successfully connected to MongoDB!")
                 
+                # Setup indexes
                 await db.users.create_index("email", unique=True)
                 await db.subscribers.create_index("email", unique=True)
-                await db.subscribers.create_index("device_id")
                 await db.songs.create_index("title")
-                await db.songs.create_index("artist")
-                await db.songs.create_index("genre")
-                await db.playlists.create_index("owner_id")
-                await db.play_history.create_index([("user_id", 1), ("played_at", -1)])
                 
-                logger.info(f"Database initialized successfully using {uri[:20]}...")
+                logger.info("Database initialized successfully")
                 return # Success
             except Exception as e:
                 print(f"Failed to connect to {uri[:20]}... : {e}")
@@ -382,9 +381,8 @@ class DatabaseManager:
                 continue
         
         logger.error(f"All database connection attempts failed. Last error: {last_error}")
-        # Even if it fails, assign a client to avoid attribute errors later, 
-        # though routes will still fail when used.
-        client = motor.motor_asyncio.AsyncIOMotorClient("mongodb://127.0.0.1:27017")
+        # Use fallback with short timeout to prevent hanging on Vercel
+        client = motor.motor_asyncio.AsyncIOMotorClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=2000)
         db = client[settings.DATABASE_NAME]
 
     @staticmethod
@@ -786,7 +784,9 @@ async def get_songs(skip: int = 0, limit: int = 50):
             logger.warning(f"Failed to map song: {e}")
             continue
     
-    await CacheManager.set(f"songs:{skip}:{limit}", json.dumps([song.dict() for song in songs]), 600)
+    # Safe serialization for Pydantic V1/V2
+    results_list = [(s.model_dump() if hasattr(s, "model_dump") else s.dict()) for s in songs]
+    await CacheManager.set(f"songs:{skip}:{limit}", json.dumps(results_list, default=str), 600)
     return songs
 
 
@@ -807,7 +807,9 @@ async def get_song(song_id: str):
             song_data["file_url"] = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
         
         song = Song(**song_data)
-        await CacheManager.set(f"song:{song_id}", song.json(), 3600)
+        # Safe serialization for Pydantic V1/V2
+        song_json = song.model_dump_json() if hasattr(song, "model_dump_json") else song.json()
+        await CacheManager.set(f"song:{song_id}", song_json, 3600)
         return song
     except Exception as e:
         logger.error(f"Error mapping single song: {e}")
@@ -923,7 +925,9 @@ async def search(q: str, limit: int = 50):
         albums=albums[:20]
     )
     
-    await CacheManager.set(cache_key, result.json(), 300)
+    # Safe serialization for Pydantic V1/V2
+    result_json = result.model_dump_json() if hasattr(result, "model_dump_json") else result.json()
+    await CacheManager.set(cache_key, result_json, 300)
     return result
 
 
@@ -966,7 +970,9 @@ async def get_recent_songs(current_user: Optional[User] = Depends(get_optional_u
                 mapped = SongAPI.map_to_song_model(api_song)
                 song_obj = Song(**mapped)
                 songs.append(song_obj)
-                await CacheManager.set(f"song:{song_id}", song_obj.json(), 3600)
+                # Safe serialization for Pydantic V1/V2
+                song_json = song_obj.model_dump_json() if hasattr(song_obj, "model_dump_json") else song_obj.json()
+                await CacheManager.set(f"song:{song_id}", song_json, 3600)
     
     if not songs:
         api_results = await SongAPI.search_songs("Top Songs", 6)
@@ -1008,8 +1014,13 @@ async def get_user_library(current_user: Optional[User] = Depends(get_optional_u
 
 @app.get("/api/settings/theme")
 async def get_theme():
-    settings_doc = await db.settings.find_one({"id": "global"})
-    return {"theme": settings_doc.get("theme", "default") if settings_doc else "default"}
+    try:
+        if db is None: return {"theme": "default"}
+        settings_doc = await db.settings.find_one({"id": "global"})
+        return {"theme": settings_doc.get("theme", "default") if settings_doc else "default"}
+    except Exception as e:
+        logger.error(f"Error fetching theme: {e}")
+        return {"theme": "default"}
 
 @app.post("/api/admin/theme")
 async def update_theme(data: ThemeUpdate, admin_user: User = Depends(require_admin)):
@@ -1098,7 +1109,17 @@ async def get_all_categories_songs():
             logger.error(f"Error fetching category {cat['name']}: {e}")
             continue
             
-    await CacheManager.set(cache_key, json.dumps([{"category_id": r["category_id"], "category_name": r["category_name"], "songs": [s.dict() for s in r["songs"]]} for r in result]), 3600)
+    # Safe serialization for Pydantic V1/V2
+    formatted_result = []
+    for r in result:
+        cat_data = {
+            "category_id": r["category_id"],
+            "category_name": r["category_name"],
+            "songs": [(s.model_dump() if hasattr(s, "model_dump") else s.dict()) for s in r["songs"]]
+        }
+        formatted_result.append(cat_data)
+        
+    await CacheManager.set(cache_key, json.dumps(formatted_result, default=str), 3600)
     return result
 
 @app.get("/api/songs/category/{cat_id}")
@@ -1122,7 +1143,9 @@ async def get_category_songs(cat_id: str, skip: int = 0, limit: int = 50):
         except:
             continue
             
-    await CacheManager.set(cache_key, json.dumps([s.dict() for s in songs]), 600)
+    # Safe serialization for Pydantic V1/V2
+    songs_list = [(s.model_dump() if hasattr(s, "model_dump") else s.dict()) for s in songs]
+    await CacheManager.set(cache_key, json.dumps(songs_list, default=str), 600)
     return {"category": cat["name"], "songs": songs}
 
 @app.get("/api/admin/songs")
