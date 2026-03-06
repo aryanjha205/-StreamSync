@@ -10,3 +10,5 @@ mutagen
 certifi
 dnspython
 httpx
+email-validator
+python-dotenv

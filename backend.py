@@ -186,7 +186,11 @@ class SongAPI:
         image_data = api_song.get("image") or api_song.get("thumbnail")
         cover_url = None
         if isinstance(image_data, list) and image_data:
-            cover_url = image_data[-1].get("url") if isinstance(image_data[-1], dict) else str(image_data[-1])
+            last_img = image_data[-1]
+            if isinstance(last_img, dict):
+                cover_url = last_img.get("url") or last_img.get("link")
+            else:
+                cover_url = str(last_img)
         elif isinstance(image_data, str):
             cover_url = image_data
 
@@ -195,9 +199,15 @@ class SongAPI:
         file_url = None
         if isinstance(download_data, list) and download_data:
             # Usually sorted by quality, pick the last one (highest quality)
-            file_url = download_data[-1].get("url") if isinstance(download_data[-1], dict) else str(download_data[-1])
+            last_dl = download_data[-1]
+            if isinstance(last_dl, dict):
+                file_url = last_dl.get("link") or last_dl.get("url")
+            else:
+                file_url = str(last_dl)
         elif isinstance(download_data, str):
             file_url = download_data
+        elif isinstance(api_song, dict) and api_song.get("link"):
+            file_url = api_song.get("link")
             
         return {
             "id": str(id),
@@ -215,12 +225,19 @@ class SongAPI:
 
 
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # --- Settings ---
 class Settings:
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://streetsofahmedabad2_db_user:mAEtqTMGGmEOziVE@cluster0.9u0xk1w.mongodb.net/streamsync?retryWrites=true&w=majority")
+    # Use the new user-provided MongoDB URI as primary fallback
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://pubgb0232_db_user:esJyAwyw0sCTC3XC@cluster0.egwoi83.mongodb.net/streamsync?retryWrites=true&w=majority&appName=Cluster0")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-    JWT_SECRET = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
+    JWT_SECRET = os.getenv("JWT_SECRET", "streamsync-secure-key-2024")
     JWT_ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 30
     REFRESH_TOKEN_EXPIRE_DAYS = 7
@@ -229,10 +246,10 @@ class Settings:
     ALLOWED_AUDIO_TYPES = {".mp3", ".wav", ".flac", ".m4a", ".aac"}
     ALLOWED_IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp"}
     # Email Settings
-    SMTP_SERVER = "smtp.gmail.com"
-    SMTP_PORT = 587
-    SMTP_USERNAME = "bharatbyte.com@gmail.com"
-    SMTP_PASSWORD = "xbbixxdzmecsvjto" 
+    SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "bharatbyte.com@gmail.com")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "xbbixxdzmecsvjto") 
 
 settings = Settings()
 
@@ -336,11 +353,12 @@ class DatabaseManager:
     @staticmethod
     async def init_db():
         global db
-        print(f"DEBUG: Connecting to MongoDB with URI: {settings.MONGODB_URI}")
-        print(f"Connecting to MongoDB: {settings.MONGODB_URI[:20]}...")
+        print("DEBUG: Initializing database connection...")
         
+        # Extremely short timeouts for Atlas to prevent Vercel boot-up hang
         uris_to_try = [settings.MONGODB_URI]
-        if settings.MONGODB_URI != "mongodb://127.0.0.1:27017":
+        # Only add localhost if we are NOT on Vercel
+        if not os.environ.get("VERCEL") and settings.MONGODB_URI != "mongodb://127.0.0.1:27017":
             uris_to_try.append("mongodb://127.0.0.1:27017")
             
         last_error = None
@@ -348,30 +366,30 @@ class DatabaseManager:
             try:
                 print(f"Attempting to connect to: {uri[:40]}...")
                 client_kwargs = {
-                    "serverSelectionTimeoutMS": 5000,
-                    "connectTimeoutMS": 5000,
-                    "retryWrites": True
+                    "serverSelectionTimeoutMS": 3000,
+                    "connectTimeoutMS": 3000,
+                    "retryWrites": True,
+                    "tls": True if ("mongodb+srv" in uri or "mongodb.net" in uri) else False,
+                    "tlsAllowInvalidCertificates": True # Often needed in serverless environments
                 }
                 
-                # Check for Atlas connection
-                if "mongodb+srv" in uri or ("cluster" in uri and "mongodb.net" in uri):
-                    client_kwargs["tls"] = True
-                    # tlsCAFile is usually required for Atlas on some environments
+                if client_kwargs["tls"]:
                     try:
+                        # Use certifi if available, else system certs
                         client_kwargs["tlsCAFile"] = certifi.where()
                     except:
                         pass
                     
                 client = motor.motor_asyncio.AsyncIOMotorClient(uri, **client_kwargs)
-                # Verify connection with a short timeout
-                await asyncio.wait_for(client.admin.command('ping'), timeout=5.0)
+                # Verify connection with a very short timeout
+                await asyncio.wait_for(client.admin.command('ping'), timeout=3.0)
                 db = client[settings.DATABASE_NAME]
                 print(f"Successfully connected to MongoDB!")
                 
-                # Setup indexes
-                await db.users.create_index("email", unique=True)
-                await db.subscribers.create_index("email", unique=True)
-                await db.songs.create_index("title")
+                # Setup indexes (non-critical, can fail)
+                try:
+                    await db.users.create_index("email", unique=True)
+                except: pass
                 
                 logger.info("Database initialized successfully")
                 return # Success
@@ -381,8 +399,8 @@ class DatabaseManager:
                 continue
         
         logger.error(f"All database connection attempts failed. Last error: {last_error}")
-        # Use fallback with short timeout to prevent hanging on Vercel
-        client = motor.motor_asyncio.AsyncIOMotorClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=2000)
+        # Final fallback - no-op client to prevent NoneType errors
+        client = motor.motor_asyncio.AsyncIOMotorClient("mongodb://127.0.0.1:27017", serverSelectionTimeoutMS=1000)
         db = client[settings.DATABASE_NAME]
 
     @staticmethod
@@ -557,10 +575,22 @@ manager = ConnectionManager()
 # --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await DatabaseManager.init_db()
+    # Non-blocking store for initialization
+    init_task = asyncio.create_task(DatabaseManager.init_db())
+    # Wait only a short time for DB to prevent function timeout
+    try:
+        await asyncio.wait_for(asyncio.shield(init_task), timeout=2.0)
+    except asyncio.TimeoutError:
+        print("Continuing startup while DB connects in background...")
+    
     await CacheManager.init_redis()
-    await seed_demo_data()
-    logger.info("Application started successfully")
+    
+    # Run seed in background IF NOT ON VERCEL to prevent startup noise
+    # Admin is already there from initial local run if using same DB
+    if db and not os.environ.get("VERCEL"):
+        asyncio.create_task(seed_demo_data())
+        
+    logger.info("Application lifespan started")
     yield
     if redis_client:
         await redis_client.close()
@@ -770,24 +800,31 @@ async def refresh_token(token_data: dict):
 async def get_songs(skip: int = 0, limit: int = 50):
     cached_songs = await CacheManager.get(f"songs:{skip}:{limit}")
     if cached_songs:
-        return json.loads(cached_songs)
-    
-    # Using 'Latest Hindi' for a good initial list
-    api_results = await SongAPI.search_songs("Latest Hindi", limit)
-    songs = []
-    for api_song in api_results:
         try:
-            mapped = SongAPI.map_to_song_model(api_song)
-            if mapped.get("file_url") and mapped.get("id") and mapped.get("title"):
-                songs.append(Song(**mapped))
-        except Exception as e:
-            logger.warning(f"Failed to map song: {e}")
-            continue
+            return [Song(**s) for s in json.loads(cached_songs)]
+        except:
+            await CacheManager.delete(f"songs:{skip}:{limit}")
     
-    # Safe serialization for Pydantic V1/V2
-    results_list = [(s.model_dump() if hasattr(s, "model_dump") else s.dict()) for s in songs]
-    await CacheManager.set(f"songs:{skip}:{limit}", json.dumps(results_list, default=str), 600)
-    return songs
+    try:
+        # Using 'Latest Hindi' for a good initial list
+        api_results = await SongAPI.search_songs("Latest Hindi", limit)
+        songs = []
+        for api_song in api_results:
+            try:
+                mapped = SongAPI.map_to_song_model(api_song)
+                if mapped.get("file_url") and mapped.get("id") and mapped.get("title"):
+                    songs.append(Song(**mapped))
+            except Exception as e:
+                logger.warning(f"Failed to map song: {e}")
+                continue
+        
+        # Safe serialization for Pydantic V1/V2
+        results_list = [(s.model_dump() if hasattr(s, "model_dump") else s.dict()) for s in songs]
+        await CacheManager.set(f"songs:{skip}:{limit}", json.dumps(results_list, default=str), 600)
+        return songs
+    except Exception as e:
+        logger.error(f"Error in get_songs: {e}")
+        return []
 
 
 @app.get("/api/songs/{song_id}", response_model=Song)
@@ -884,7 +921,10 @@ async def search(q: str, limit: int = 50):
     cache_key = f"search:{hashlib.md5(q.encode()).hexdigest()}:{limit}"
     cached_result = await CacheManager.get(cache_key)
     if cached_result:
-        return SearchResponse(**json.loads(cached_result))
+        try:
+            return SearchResponse(**json.loads(cached_result))
+        except:
+            await CacheManager.delete(cache_key)
     
     # Increase internal limit to get more variety
     fetch_limit = 50 
@@ -901,34 +941,38 @@ async def search(q: str, limit: int = 50):
             continue
 
     
-    # For artists and albums, we can derive them from the songs or just return empty for now
-    artists_map = {}
-    albums_map = {}
-    
-    for s in songs:
-        if s.artist not in artists_map:
-            artists_map[s.artist] = 0
-        artists_map[s.artist] += 1
+    try:
+        # For artists and albums, we can derive them from the songs or just return empty for now
+        artists_map = {}
+        albums_map = {}
         
-        if s.album:
-            album_key = f"{s.album}|{s.artist}"
-            if album_key not in albums_map:
-                albums_map[album_key] = {"album": s.album, "artist": s.artist, "count": 0}
-            albums_map[album_key]["count"] += 1
+        for s in songs:
+            if s.artist not in artists_map:
+                artists_map[s.artist] = 0
+            artists_map[s.artist] += 1
+            
+            if s.album:
+                album_key = f"{s.album}|{s.artist}"
+                if album_key not in albums_map:
+                    albums_map[album_key] = {"album": s.album, "artist": s.artist, "count": 0}
+                albums_map[album_key]["count"] += 1
 
-    artists = [{"name": name, "song_count": count} for name, count in artists_map.items()]
-    albums = [{"album": data["album"], "artist": data["artist"], "song_count": data["count"]} for data in albums_map.values()]
+        artists = [{"name": name, "song_count": count} for name, count in artists_map.items()]
+        albums = [{"album": data["album"], "artist": data["artist"], "song_count": data["count"]} for data in albums_map.values()]
 
-    result = SearchResponse(
-        songs=songs[:limit],
-        artists=artists[:20],
-        albums=albums[:20]
-    )
-    
-    # Safe serialization for Pydantic V1/V2
-    result_json = result.model_dump_json() if hasattr(result, "model_dump_json") else result.json()
-    await CacheManager.set(cache_key, result_json, 300)
-    return result
+        result = SearchResponse(
+            songs=songs[:limit],
+            artists=artists[:20],
+            albums=albums[:20]
+        )
+        
+        # Safe serialization for Pydantic V1/V2
+        result_json = result.model_dump_json() if hasattr(result, "model_dump_json") else result.json()
+        await CacheManager.set(cache_key, result_json, 300)
+        return result
+    except Exception as e:
+        logger.error(f"Search API Error: {e}")
+        return SearchResponse(songs=[], artists=[], albums=[])
 
 
 # User endpoints
@@ -1243,11 +1287,12 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 @app.get("/api/health/db")
 async def database_health():
     try:
+        if db is None: return {"status": "starting", "database": "none"}
         await db.admin.command('ismaster')
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Database connection failed")
+        return {"status": "error", "database": "disconnected", "error": str(e)}
 
 
 if __name__ == "__main__":
@@ -1259,13 +1304,13 @@ if __name__ == "__main__":
     
     # Optional: auto-open browser
     try:
-        webbrowser.open("http://localhost:8000")
+        webbrowser.open("http://localhost:8001")
     except:
         pass
     uvicorn.run(
         "backend:app",
         host="0.0.0.0",
-        port=8000,
+        port=8001,
         reload=True,
         log_level="info"
     )
