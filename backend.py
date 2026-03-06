@@ -26,9 +26,13 @@ from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Req
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from passlib.context import CryptContext
 import uvicorn
+
+# Global storage for DB and Redis to ensure they exist at module level
+db = None
+redis_client = None
 
 # Database
 import motor.motor_asyncio
@@ -56,17 +60,15 @@ logger = logging.getLogger(__name__)
 
 # --- External Song API ---
 class SongAPI:
-    BASE_URL = "https://saavn.me/api" # Using saavn.me as a common fallback
+    BASE_URL = "https://saavn.sumit.co/api" # Verified working endpoint
     
     @staticmethod
     async def search_songs(query: str, limit: int = 20) -> List[Dict[str, Any]]:
         logger.info(f"SongAPI: Searching for '{query}'")
-        # Reliable public endpoints
+        # Reliable public endpoints (prioritize sumit.co as it is verified working)
         base_urls = [
-            "https://saavn.dev/api",
-            "https://jiosaavn-api.vercel.app/api",
             "https://saavn.sumit.co/api",
-            "https://saavn.me/api"
+            "https://jiosaavn-api-privatecvc2.vercel.app/api"
         ]
         
         for base in base_urls:
@@ -82,12 +84,15 @@ class SongAPI:
                             data = response.json()
                             results = []
                             if isinstance(data, dict):
-                                if data.get("success") or str(data.get("status")).lower() == "success" or data.get("data"):
-                                    d = data.get("data", {})
+                                if data.get("success") or (isinstance(data.get("status"), str) and data.get("status").lower() == "success") or data.get("data"):
+                                    d = data.get("data")
                                     if isinstance(d, dict):
                                         results = d.get("results", [])
                                     elif isinstance(d, list):
                                         results = d
+                                    else:
+                                        # If d is None but success is true, check top level
+                                        results = data.get("results", [])
                                 elif "results" in data:
                                     results = data["results"]
                                 elif "data" in data and isinstance(data["data"], list):
@@ -111,7 +116,7 @@ class SongAPI:
     @staticmethod
     async def get_song_details(song_id: str) -> Optional[Dict[str, Any]]:
         # List of endpoints to try for details
-        base_urls = ["https://saavn.sumit.co/api", "https://saavn.dev/api", "https://saavn.me/api", "https://jiosaavn-api.vercel.app/api"]
+        base_urls = ["https://saavn.sumit.co/api", "https://jiosaavn-api-privatecvc2.vercel.app/api"]
         
         for base in base_urls:
             url = f"{base if base.endswith('/') else base + '/'}songs"
@@ -287,13 +292,13 @@ redis_client = None
 # --- Models ---
 class UserBase(BaseModel):
     name: str
-    email: EmailStr
+    email: str
 
 class UserCreate(UserBase):
     password: str
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 class User(UserBase):
@@ -309,10 +314,10 @@ class Token(BaseModel):
     user: Optional[User] = None
 
 class OTPSend(BaseModel):
-    email: EmailStr
+    email: str
 
 class OTPVerify(BaseModel):
-    email: EmailStr
+    email: str
     otp: str
     device_id: str
 
@@ -587,12 +592,12 @@ async def lifespan(app: FastAPI):
     
     # Run seed in background IF NOT ON VERCEL to prevent startup noise
     # Admin is already there from initial local run if using same DB
-    if db and not os.environ.get("VERCEL"):
+    if db is not None and not os.environ.get("VERCEL"):
         asyncio.create_task(seed_demo_data())
         
     logger.info("Application lifespan started")
     yield
-    if redis_client:
+    if redis_client is not None:
         await redis_client.close()
     logger.info("Application shutdown complete")
 
@@ -600,9 +605,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="StreamSync Music API",
     description="Production-ready music streaming platform API",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan
 )
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "db": "connected" if db else "disconnected"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -1127,7 +1136,10 @@ async def get_all_categories_songs():
     cache_key = "categories_home_data"
     cached = await CacheManager.get(cache_key)
     if cached:
-        return json.loads(cached)
+        try:
+            return json.loads(cached)
+        except:
+            await CacheManager.delete(cache_key)
     
     result = []
     # We'll fetch top 8 songs for each category
@@ -1153,17 +1165,20 @@ async def get_all_categories_songs():
             logger.error(f"Error fetching category {cat['name']}: {e}")
             continue
             
-    # Safe serialization for Pydantic V1/V2
-    formatted_result = []
-    for r in result:
-        cat_data = {
-            "category_id": r["category_id"],
-            "category_name": r["category_name"],
-            "songs": [(s.model_dump() if hasattr(s, "model_dump") else s.dict()) for s in r["songs"]]
-        }
-        formatted_result.append(cat_data)
-        
-    await CacheManager.set(cache_key, json.dumps(formatted_result, default=str), 3600)
+    try:
+        # Safe serialization for Pydantic V1/V2
+        formatted_result = []
+        for r in result:
+            cat_data = {
+                "category_id": r["category_id"],
+                "category_name": r["category_name"],
+                "songs": [(s.model_dump() if hasattr(s, "model_dump") else s.dict()) for s in r["songs"]]
+            }
+            formatted_result.append(cat_data)
+            
+        await CacheManager.set(cache_key, json.dumps(formatted_result, default=str), 3600)
+    except:
+        pass
     return result
 
 @app.get("/api/songs/category/{cat_id}")
@@ -1302,15 +1317,28 @@ if __name__ == "__main__":
     print("Access the app at: http://localhost:8000")
     print("="*50 + "\n")
     
-    # Optional: auto-open browser
+    import socket
+    def is_port_in_use(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('localhost', port)) == 0
+            
+    target_port = 8001
+    if is_port_in_use(target_port):
+        target_port = 8002
+    if is_port_in_use(target_port):
+        target_port = 8003
+        
+    print(f"Starting server on port {target_port}...")
+    
     try:
-        webbrowser.open("http://localhost:8001")
+        webbrowser.open(f"http://localhost:{target_port}")
     except:
         pass
+        
     uvicorn.run(
         "backend:app",
         host="0.0.0.0",
-        port=8001,
+        port=target_port,
         reload=True,
         log_level="info"
     )
