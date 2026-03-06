@@ -8,17 +8,18 @@
     "theme_color": "#1ed760",
     "icons": [
         {
-            "src": "https://cdn-icons-png.flaticon.com/512/3653/3653139.png",
+            "src": "https://github.com/aryanjha205/-StreamSync/blob/main/stream.png?raw=true",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "any maskable"
         },
         {
-            "src": "https://cdn-icons-png.flaticon.com/512/3653/3653139.png",
+            "src": "https://github.com/aryanjha205/-StreamSync/blob/main/stream.png?raw=true",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any maskable"
         }
     ],
     "orientation": "portrait"
+
 }
