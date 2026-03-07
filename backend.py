@@ -983,6 +983,34 @@ async def search(q: str, limit: int = 50):
         return SearchResponse(songs=[], artists=[], albums=[])
 
 
+# Favorites API endpoints
+@app.get("/api/favorites", response_model=List[Song])
+async def get_favorites(current_user: User = Depends(get_current_user)):
+    user_doc = await db.users.find_one({"_id": current_user.id})
+    if not user_doc or "favorites" not in user_doc:
+        return []
+    return [Song(**s) for s in user_doc["favorites"]]
+
+@app.post("/api/favorites")
+async def add_favorite(request: Request, current_user: User = Depends(get_current_user)):
+    data = await request.json()
+    song = data.get("song")
+    if not song:
+        raise HTTPException(status_code=400, detail="Song data required")
+    await db.users.update_one(
+        {"_id": current_user.id},
+        {"$push": {"favorites": song}}
+    )
+    return {"message": "Added to favorites"}
+
+@app.delete("/api/favorites/{song_id}")
+async def remove_favorite(song_id: str, current_user: User = Depends(get_current_user)):
+    await db.users.update_one(
+        {"_id": current_user.id},
+        {"$pull": {"favorites": {"id": song_id}}}
+    )
+    return {"message": "Removed from favorites"}
+
 # User endpoints
 @app.get("/api/user/recent")
 async def get_recent_songs(current_user: Optional[User] = Depends(get_optional_user)):
