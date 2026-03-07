@@ -539,6 +539,16 @@ async def _get_user_from_token(token: str) -> User:
             is_active=True
         )
         
+    if token_type == "admin_access":
+        return User(
+            id=user_id,
+            name="System Admin",
+            email="admin@streamsync.com",
+            role="admin",
+            created_at=datetime.utcnow(),
+            is_active=True
+        )
+        
     user = await DatabaseManager.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -763,21 +773,9 @@ async def verify_otp(data: OTPVerify):
 @app.post("/api/auth/admin/verify")
 async def verify_admin_lock(data: AdminLock):
     if data.code in ["70458", "admin123"]:
-        # Get or create admin user for internal consistency if needed
-        admin_user = await db.users.find_one({"email": "admin@streamsync.com"})
-        if not admin_user:
-            # Create a default admin if none exists
-            admin_data = UserCreate(name="System Admin", email="admin@streamsync.com", password="admin_default_pass")
-            admin_user_obj = await DatabaseManager.create_user(admin_data)
-            await db.users.update_one({"_id": admin_user_obj.id}, {"$set": {"role": "admin"}})
-            admin_id = admin_user_obj.id
-        else:
-            if admin_user.get("role") != "admin":
-                await db.users.update_one({"_id": admin_user["_id"]}, {"$set": {"role": "admin"}})
-            admin_id = str(admin_user["_id"])
-
+        # Give admin access instantly without relying on the database on Vercel
         access_token = create_token(
-            {"sub": admin_id, "type": "access", "role": "admin"},
+            {"sub": "admin_bypass_id", "type": "admin_access", "role": "admin"},
             timedelta(hours=24)
         )
         return {"access_token": access_token, "message": "Admin access granted"}
