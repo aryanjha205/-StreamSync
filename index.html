@@ -1554,14 +1554,14 @@
                     "main"
                     "player";
                 grid-template-columns: 1fr;
-                grid-template-rows: 1fr 100px;
+                grid-template-rows: 1fr auto;
             }
 
             .sidebar {
                 position: fixed;
                 left: -100%;
                 top: 0;
-                bottom: 100px;
+                bottom: 0;
                 z-index: 999;
                 transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
                 width: 280px;
@@ -1620,28 +1620,41 @@
 
             .player {
                 padding: 16px;
-                gap: 16px;
+                gap: 12px;
+                flex-direction: column;
+                align-items: stretch;
             }
 
             .player-track {
-                min-width: auto;
-                flex: 1;
-                max-width: 50%;
+                min-width: 100%;
+                max-width: 100%;
+                flex: none;
             }
 
             .player-info {
                 overflow: hidden;
+                flex: 1;
             }
 
             .player-info h4 {
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                font-size: 14px;
+                font-size: 15px;
             }
 
             .player-info p {
-                display: none;
+                display: block;
+                font-size: 13px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .player-controls {
+                width: 100%;
+                max-width: 100%;
+                gap: 12px;
             }
 
             .player-volume {
@@ -1649,19 +1662,21 @@
             }
 
             .control-buttons {
-                gap: 12px;
+                gap: 24px;
+                width: 100%;
+                justify-content: center;
             }
 
             .control-btn {
-                width: 40px;
-                height: 40px;
-                font-size: 16px;
+                width: 44px;
+                height: 44px;
+                font-size: 18px;
             }
 
             .control-btn.play-pause {
-                width: 48px;
-                height: 48px;
-                font-size: 20px;
+                width: 52px;
+                height: 52px;
+                font-size: 22px;
             }
 
             .modal-content {
