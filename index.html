@@ -5,13 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>StreamSync - Music for Everyone</title>
+    <title>Tape - Music for Everyone</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1ed760">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3653/3653139.png">
+    <link rel="apple-touch-icon" href="/tape.png">
     <style>
         * {
             touch-action: manipulation;
@@ -2356,8 +2356,8 @@
             </div>
             <div class="logo" style="justify-content: center; margin: 16px 0 32px; cursor: pointer;"
                 onclick="handleLogoClick()">
-                <i class="fas fa-music"></i>
-                <span>StreamSync</span>
+                <img src="/tape.png" alt="Tape Logo" style="width: 28px; height: 28px; border-radius: 4px;">
+                <span>Tape</span>
             </div>
 
             <!-- Subscription Flow -->
@@ -2400,8 +2400,8 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="logo" style="cursor: pointer;" onclick="handleLogoClick()">
-                <i class="fas fa-music"></i>
-                <span>StreamSync</span>
+                <img src="/tape.png" alt="Tape Logo" style="width: 28px; height: 28px; border-radius: 4px;">
+                <span>Tape</span>
             </div>
 
             <nav>
@@ -2489,14 +2489,6 @@
                             <div>
                                 <h2 class="section-title" style="font-size: 36px; margin-bottom: 8px;">Global Music
                                     Catalog</h2>
-                                <p class="page-subtitle" style="font-size: 18px; color: var(--text-secondary);">Direct
-                                    access to 10,000,000+ premium songs</p>
-                            </div>
-                            <div id="catalog-stats" style="text-align: right;">
-                                <div style="font-size: 24px; font-weight: 800; color: var(--primary);">10,000,000</div>
-                                <div
-                                    style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">
-                                    Songs Available</div>
                             </div>
                         </div>
                         <div class="content-grid" id="global-catalog-grid">
@@ -3622,7 +3614,7 @@
             const isPremium = currentUser && (currentUser.role === 'admin' || currentUser.role === 'subscriber');
 
             if (!isPremium) {
-                showNotification('Enjoying StreamSync Free? Premium accounts get ad-free and HD music!', 'info');
+                showNotification('Enjoying Tape Free? Premium accounts get ad-free and HD music!', 'info');
             }
 
             // Always update currentIndex if song exists in currentQueue
@@ -3738,7 +3730,7 @@
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: currentSong.title,
                     artist: currentSong.artist,
-                    album: currentSong.album || 'StreamSync',
+                    album: currentSong.album || 'Tape',
                     artwork: [
                         { src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }
                     ]
@@ -3818,7 +3810,7 @@
             if (!currentSong) return;
             // The URL could be a deep link to the song if you had routing, right now we just use app link
             const title = `${currentSong.title} by ${currentSong.artist}`;
-            const text = `Listen to ${title} on StreamSync!`;
+            const text = `Listen to ${title} on Tape!`;
             const url = window.location.origin;
 
             if (navigator.share) {
@@ -3917,7 +3909,7 @@
 
                 const resultsTitle = document.querySelector('#home-search-results .section-title');
                 if (query === 'Latest Hits') {
-                    resultsTitle.textContent = 'Global Music Catalog (10,000,000 Songs)';
+                    resultsTitle.textContent = 'Global Music Catalog';
                 } else {
                     resultsTitle.textContent = `Search Results for "${query}"`;
                 }

@@ -1,6 +1,6 @@
 {
-    "name": "StreamSync Music",
-    "short_name": "StreamSync",
+    "name": "Tape Music",
+    "short_name": "Tape",
     "description": "Professional music streaming platform with premium UI and rich features.",
     "start_url": "/",
     "display": "standalone",
@@ -8,18 +8,17 @@
     "theme_color": "#1ed760",
     "icons": [
         {
-            "src": "https://github.com/aryanjha205/-StreamSync/blob/main/stream.png?raw=true",
+            "src": "/tape.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "any maskable"
         },
         {
-            "src": "https://github.com/aryanjha205/-StreamSync/blob/main/stream.png?raw=true",
+            "src": "/tape.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any maskable"
         }
     ],
     "orientation": "portrait"
-
 }

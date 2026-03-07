@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-StreamSync Music Streaming Backend
+Tape Music Streaming Backend
 A production-ready music streaming API built with FastAPI, MongoDB, and GridFS
 Features: JWT auth, role-based access, file uploads, streaming, caching, WebSockets
 """
@@ -239,10 +239,10 @@ except ImportError:
 # --- Settings ---
 class Settings:
     # Use the new user-provided MongoDB URI as primary fallback
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://pubgb0232_db_user:esJyAwyw0sCTC3XC@cluster0.egwoi83.mongodb.net/streamsync?retryWrites=true&w=majority&appName=Cluster0")
-    DATABASE_NAME = os.getenv("DATABASE_NAME", "streamsync")
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://pubgb0232_db_user:esJyAwyw0sCTC3XC@cluster0.egwoi83.mongodb.net/tape?retryWrites=true&w=majority&appName=Cluster0")
+    DATABASE_NAME = os.getenv("DATABASE_NAME", "tape")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-    JWT_SECRET = os.getenv("JWT_SECRET", "streamsync-secure-key-2024")
+    JWT_SECRET = os.getenv("JWT_SECRET", "tape-secure-key-2024")
     JWT_ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 30
     REFRESH_TOKEN_EXPIRE_DAYS = 7
@@ -543,7 +543,7 @@ async def _get_user_from_token(token: str) -> User:
         return User(
             id=user_id,
             name="System Admin",
-            email="admin@streamsync.com",
+            email="admin@tape.com",
             role="admin",
             created_at=datetime.utcnow(),
             is_active=True
@@ -613,7 +613,7 @@ async def lifespan(app: FastAPI):
 
 # --- FastAPI App ---
 app = FastAPI(
-    title="StreamSync Music API",
+    title="Tape Music API",
     description="Production-ready music streaming platform API",
     version="1.0.1",
     lifespan=lifespan
@@ -640,15 +640,15 @@ app.add_middleware(
 # --- Demo Data Seeding ---
 async def seed_demo_data():
     try:
-        admin_exists = await db.users.find_one({"email": "admin@streamsync.com"})
+        admin_exists = await db.users.find_one({"email": "admin@tape.com"})
         if not admin_exists:
-            admin_data = UserCreate(name="Admin User", email="admin@streamsync.com", password="admin123")
+            admin_data = UserCreate(name="Admin User", email="admin@tape.com", password="admin123")
             admin_user = await DatabaseManager.create_user(admin_data)
             await db.users.update_one({"_id": admin_user.id}, {"$set": {"role": "admin"}})
             logger.info("Admin user created")
-        demo_exists = await db.users.find_one({"email": "demo@streamsync.com"})
+        demo_exists = await db.users.find_one({"email": "demo@tape.com"})
         if not demo_exists:
-            demo_data = UserCreate(name="Demo User", email="demo@streamsync.com", password="demo123")
+            demo_data = UserCreate(name="Demo User", email="demo@tape.com", password="demo123")
             await DatabaseManager.create_user(demo_data)
             logger.info("Demo user created")
         logger.info("Demo data seeded (users only) successfully")
@@ -663,7 +663,7 @@ async def root():
     if os.path.exists(frontend_path):
         from fastapi.responses import FileResponse
         return FileResponse(frontend_path)
-    return {"message": "StreamSync Music API", "version": "1.0.0", "status": "running"}
+    return {"message": "Tape Music API", "version": "1.0.0", "status": "running"}
 
 @app.get("/health")
 async def health_check():
@@ -701,24 +701,24 @@ async def send_otp(data: OTPSend):
     }
     
     # Send actual email
-    subject = "StreamSync OTP Verification"
+    subject = "Tape OTP Verification"
     body = f"""
     <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f9f9f9; padding: 20px;">
             <div style="max-width: 600px; margin: 0 auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                 <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #1DB954; margin: 0; font-size: 28px;">StreamSync</h1>
+                    <h1 style="color: #1DB954; margin: 0; font-size: 28px;">Tape</h1>
                     <p style="color: #666; font-size: 14px;">Lifetime Premium Access</p>
                 </div>
                 <p>Hello,</p>
-                <p>Verify your email to get lifetime access to all songs, playlists, and premium features on StreamSync.</p>
+                <p>Verify your email to get lifetime access to all songs, playlists, and premium features on Tape.</p>
                 <div style="text-align: center; margin: 40px 0; background: #f4fdf7; padding: 30px; border-radius: 8px; border: 1px dashed #1DB954;">
                     <p style="margin: 0 0 10px 0; color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your OTP Code</p>
                     <span style="font-size: 42px; font-weight: 800; letter-spacing: 8px; color: #1DB954;">{otp}</span>
                 </div>
                 <p style="font-size: 14px; color: #666;">This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
                 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999; font-size: 12px;">
-                    <p>&copy; 2026 StreamSync Music. Experience the rhythm.</p>
+                    <p>&copy; 2026 Tape Music. Experience the rhythm.</p>
                 </div>
             </div>
         </body>
@@ -1369,7 +1369,7 @@ async def get_favorites(current_user: User = Depends(get_current_user)):
 if __name__ == "__main__":
     # When running locally, we serve the app on localhost:8000
     print("\n" + "="*50)
-    print("StreamSync Music Streaming Service")
+    print("Tape Music Streaming Service")
     print("Access the app at: http://localhost:8000")
     print("="*50 + "\n")
     

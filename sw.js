@@ -1,4 +1,4 @@
-const CACHE_NAME = 'streamsync-v1';
+const CACHE_NAME = 'tape-v1';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
