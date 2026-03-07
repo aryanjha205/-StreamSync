@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>StreamSync - Music for Everyone</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
@@ -12,6 +13,10 @@
     <meta name="theme-color" content="#1ed760">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3653/3653139.png">
     <style>
+        * {
+            touch-action: manipulation;
+        }
+
         :root {
             --primary: #1ed760;
             --primary-dark: #1db954;
